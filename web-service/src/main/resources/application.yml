@@ -1,0 +1,14 @@
+server:
+  port: 8181
+
+spring:
+  application:
+    name: web-service
+
+service:
+  market-data:
+    url: http://localhost:8182
+  indicator:
+    url: http://localhost:8183
+  backtest:
+    url: http://localhost:8185

@@ -1,0 +1,17 @@
+server:
+  port: 8185
+
+spring:
+  application:
+    name: backtest-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:trading_platform}
+    username: ${DB_USER:trading}
+    password: ${DB_PASSWORD:trading}
+    driver-class-name: org.postgresql.Driver
+
+service:
+  market-data:
+    url: http://localhost:8182
+  indicator:
+    url: http://localhost:8183

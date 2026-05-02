@@ -1,0 +1,54 @@
+package ai.jzhu.trading.backtest.presentation.exception;
+
+import ai.jzhu.trading.common.dto.ErrorResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.time.OffsetDateTime;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+        private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(DownstreamServiceUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleDownstreamServiceUnavailable(DownstreamServiceUnavailableException ex) {
+        HttpStatus status = HttpStatus.resolve(ex.getStatus());
+        if (status == null) {
+            status = HttpStatus.SERVICE_UNAVAILABLE;
+        }
+
+        return ResponseEntity.status(status)
+                .body(new ErrorResponse(
+                        status.value(),
+                        ex.getMessage(),
+                        OffsetDateTime.now().toString()
+                ));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleBadRequest(IllegalArgumentException ex) {
+        log.warn("Backtest service bad request: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(
+                        HttpStatus.BAD_REQUEST.value(),
+                        ex.getMessage(),
+                        OffsetDateTime.now().toString()
+                ));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
+        log.error("Backtest service unexpected error", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse(
+                        HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                        "Unexpected server error",
+                        OffsetDateTime.now().toString()
+                ));
+    }
+}

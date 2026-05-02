@@ -1,0 +1,11 @@
+server:
+  port: 8183
+
+spring:
+  application:
+    name: indicator-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:trading_platform}
+    username: ${DB_USER:trading}
+    password: ${DB_PASSWORD:trading123}
+    driver-class-name: org.postgresql.Driver
