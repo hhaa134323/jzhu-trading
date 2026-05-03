@@ -4,6 +4,7 @@ import ai.jzhu.trading.marketdata.domain.model.Kline;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public interface KlineRepository {
 
@@ -16,4 +17,6 @@ public interface KlineRepository {
     );
 
     void saveAll(String tableName, String symbol, String market, List<Kline> klines);
+
+    Optional<LocalDate> findLatestDate(String tableName, String symbol, String market);
 }

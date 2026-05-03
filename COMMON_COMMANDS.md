@@ -2,6 +2,26 @@
 
 This document lists commonly used startup and shutdown commands for the project.
 
+## 0. 强制全容器（Docker）模式启动
+
+如需确保所有服务（包括 web-app 前端和所有 Java 微服务）都在 Docker 容器中运行（即使本机已安装 npm/mvn），可在启动命令前加：
+
+Windows PowerShell：
+```powershell
+$env:FORCE_DOCKER='1'; $env:FORCE_DOCKER_MAVEN='1'; scripts\manage.cmd start
+```
+
+Git Bash / Linux / macOS：
+```bash
+FORCE_DOCKER=1 FORCE_DOCKER_MAVEN=1 ./scripts/manage.sh start
+```
+
+- 适用场景：本机未装 Node/Maven，或希望完全复现生产/CI 环境。
+- 效果：所有依赖、构建、运行都在容器内完成，主机只需有 Docker。
+- 退出容器模式只需去掉上述环境变量。
+
+---
+
 ## 1. One-click Start and Stop
 
 Windows (recommended):

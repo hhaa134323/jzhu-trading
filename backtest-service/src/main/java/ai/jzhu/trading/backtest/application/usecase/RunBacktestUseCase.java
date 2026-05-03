@@ -13,6 +13,8 @@ import ai.jzhu.trading.common.dto.KlineResponse;
 import ai.jzhu.trading.common.dto.backtest.BacktestRequest;
 import ai.jzhu.trading.common.dto.backtest.BacktestTradeDetailResponse;
 import ai.jzhu.trading.common.dto.backtest.SimpleBacktestResponse;
+import ai.jzhu.trading.common.dto.backtest.BacktestMetrics;
+import ai.jzhu.trading.backtest.application.service.BacktestMetricsCalculator;
 import ai.jzhu.trading.common.dto.backtest.StrategyDefinition;
 import ai.jzhu.trading.common.dto.backtest.StrategyInfoResponse;
 import ai.jzhu.trading.common.dto.backtest.StrategySource;
@@ -71,17 +73,23 @@ public class RunBacktestUseCase {
             .map(this::toTradeDetailResponse)
             .toList();
 
+        // compute metrics based on klines + trades
+        BacktestMetricsCalculator calculator = new BacktestMetricsCalculator();
+        BacktestMetrics metrics = calculator.calculate(klines, trades);
+
         return new SimpleBacktestResponse(
                 symbol,
                 strategy.getId(),
                 strategy.getName(),
             tradeResponses.size(),
-            tradeResponses
+            tradeResponses,
+            metrics
         );
     }
 
     public List<StrategyInfoResponse> listStrategies() {
         return strategies.stream()
+                .sorted((left, right) -> left.getId().compareToIgnoreCase(right.getId()))
                 .map(s -> new StrategyInfoResponse(s.getId(), s.getName(), s.getDescription()))
                 .toList();
     }

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -23,6 +24,7 @@ public class GetKlineUseCase {
 
     private final KlineRepository klineRepository;
     private final MarketDataProvider marketDataProvider;
+    private static final ZoneId NEW_YORK = ZoneId.of("America/New_York");
 
     public GetKlineUseCase(KlineRepository klineRepository, MarketDataProvider marketDataProvider) {
         this.klineRepository = klineRepository;
@@ -40,21 +42,39 @@ public class GetKlineUseCase {
 
         if ("daily".equals(normalizedPeriod)) {
             List<Kline> cachedDaily = klineRepository.findByRange("kline_daily", symbol, market, startDate, endDate);
-            if (!cachedDaily.isEmpty()) {
-                log.info("Cache hit: read {} rows from DB for symbol={}, market={}, period={}",
-                        cachedDaily.size(), symbol, market, normalizedPeriod);
-                return toResponse(cachedDaily);
+
+            if (cachedDaily.isEmpty()) {
+                log.info("Daily cache miss: fetching data from provider for symbol={}, market={}, period={}",
+                        symbol, market, normalizedPeriod);
+                List<Kline> apiDaily = marketDataProvider.fetchKlines(symbol, market, startDate, endDate);
+                if (apiDaily.isEmpty()) {
+                    return List.of();
+                }
+                klineRepository.saveAll("kline_daily", symbol, market, apiDaily);
+                return toResponse(apiDaily);
             }
 
-            log.info("Cache miss: fetching data from provider for symbol={}, market={}, period={}",
-                    symbol, market, normalizedPeriod);
-            List<Kline> apiDaily = marketDataProvider.fetchKlines(symbol, market, startDate, endDate);
-            if (apiDaily.isEmpty()) {
-                return List.of();
+            log.info("Cache hit: read {} rows from DB for symbol={}, market={}, period={}",
+                    cachedDaily.size(), symbol, market, normalizedPeriod);
+
+            LocalDate targetEnd = endDate != null ? endDate : LocalDate.now(NEW_YORK);
+            java.util.Optional<LocalDate> dbMaxOpt = klineRepository.findLatestDate("kline_daily", symbol, market);
+            if (dbMaxOpt.isPresent()) {
+                LocalDate dbMax = dbMaxOpt.get();
+                if (dbMax.isBefore(targetEnd)) {
+                    LocalDate fetchStart = dbMax.plusDays(1);
+                    log.info("Stale cache: dbMax={} < targetEnd={} for symbol={}, market={}. Fetching missing range {}..{}",
+                            dbMax, targetEnd, symbol, market, fetchStart, targetEnd);
+                    List<Kline> missing = marketDataProvider.fetchKlines(symbol, market, fetchStart, targetEnd);
+                    if (!missing.isEmpty()) {
+                        klineRepository.saveAll("kline_daily", symbol, market, missing);
+                    }
+                    List<Kline> full = klineRepository.findByRange("kline_daily", symbol, market, startDate, endDate);
+                    return toResponse(full);
+                }
             }
 
-            klineRepository.saveAll("kline_daily", symbol, market, apiDaily);
-            return toResponse(apiDaily);
+            return toResponse(cachedDaily);
         }
 
         if (!"weekly".equals(normalizedPeriod) && !"monthly".equals(normalizedPeriod)) {
@@ -73,6 +93,23 @@ public class GetKlineUseCase {
         } else {
             log.info("Daily cache hit: read {} rows from DB for symbol={}, market={}, period={}",
                     dailyRows.size(), symbol, market, normalizedPeriod);
+
+            LocalDate targetEnd = endDate != null ? endDate : LocalDate.now(NEW_YORK);
+            java.util.Optional<LocalDate> dbMaxOpt = klineRepository.findLatestDate("kline_daily", symbol, market);
+            if (dbMaxOpt.isPresent()) {
+                LocalDate dbMax = dbMaxOpt.get();
+                if (dbMax.isBefore(targetEnd)) {
+                    LocalDate fetchStart = dbMax.plusDays(1);
+                    log.info("Stale daily rows for aggregation: dbMax={} < targetEnd={} for symbol={}, market={}. Fetching {}..{}",
+                            dbMax, targetEnd, symbol, market, fetchStart, targetEnd);
+                    List<Kline> missing = marketDataProvider.fetchKlines(symbol, market, fetchStart, targetEnd);
+                    if (!missing.isEmpty()) {
+                        klineRepository.saveAll("kline_daily", symbol, market, missing);
+                    }
+                    // refresh dailyRows used for aggregation
+                    dailyRows = klineRepository.findByRange("kline_daily", symbol, market, startDate, endDate);
+                }
+            }
         }
 
         List<Kline> aggregated = aggregateKlines(dailyRows, normalizedPeriod);

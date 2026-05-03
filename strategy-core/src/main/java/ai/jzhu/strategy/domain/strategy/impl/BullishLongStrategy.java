@@ -10,59 +10,52 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Locale;
 
 @Component
 public class BullishLongStrategy implements TradingStrategy {
 
+    private static final int DEFAULT_LOOKBACK = 20;
+    private static final int DEFAULT_EXIT_LOOKBACK = 10;
+
     @Override
     public String getId() {
-        return "bullishLong";
+        return "donchianBreakoutLong";
     }
 
     @Override
     public String getName() {
-        return "高位突破-做多";
+        return "Donchian通道突破-做多";
     }
 
     @Override
     public String getDescription() {
-        return "高位突破并回踩均线后的做多策略";
+        return "收盘价突破过去N日高点后做多，跌破过去M日低点或跌破均线退出；默认参数 lookback=20, exitLookback=10";
     }
 
     @Override
     public Optional<TradeSignal> checkOpenSignal(List<KlineData> klines, IndicatorData indicators, int currentIndex, boolean hasPosition) {
-        if (hasPosition || klines == null || indicators == null || currentIndex < 10 || currentIndex >= klines.size()) {
+        if (hasPosition || klines == null || klines.isEmpty() || indicators == null || currentIndex < DEFAULT_LOOKBACK || currentIndex >= klines.size()) {
             return Optional.empty();
         }
 
-        if (currentIndex - 1 < 0) {
+        if (currentIndex < 1) {
             return Optional.empty();
         }
 
         KlineData currK = klines.get(currentIndex);
-        KlineData lastK1 = klines.get(currentIndex - 1);
-        if (currK == null || lastK1 == null || indicators.macd() == null || indicators.ma() == null) {
+        KlineData prevK = klines.get(currentIndex - 1);
+        if (currK == null || prevK == null) {
             return Optional.empty();
         }
 
-        double maxHigh = StrategyCalculator.getValidMaxCloseHighBetweenLastPeriod(klines, currentIndex - 2, 250, 5);
+        double maxHigh = StrategyCalculator.getValidMaxCloseHighBetweenLastPeriod(klines, currentIndex - 1, DEFAULT_LOOKBACK, DEFAULT_LOOKBACK);
         if (Double.isNaN(maxHigh)) {
             return Optional.empty();
         }
 
-        Double dif = indicators.macd().getDifAt(currentIndex);
-        Double dea = indicators.macd().getDeaAt(currentIndex);
-        Double ma5 = indicators.ma().getMa5At(currentIndex);
-
-        if (dif == null || dea == null || ma5 == null) {
-            return Optional.empty();
-        }
-
-        boolean openCondition = currK.close() > maxHigh
-                && currK.isBullishPillar()
-                && lastK1.high() <= maxHigh
-                && dif > dea
-                && Math.min(lastK1.close(), currK.low()) <= ma5;
+        Double prevClose = prevK.close();
+        boolean openCondition = prevClose <= maxHigh && currK.close() > maxHigh;
 
         if (!openCondition) {
             return Optional.empty();
@@ -71,49 +64,81 @@ public class BullishLongStrategy implements TradingStrategy {
         return Optional.of(TradeSignal.openLong(
                 currentIndex,
                 currK.close(),
-                "突破前高后回踩MA5并确认MACD金叉"
+                String.format(Locale.ROOT,
+                        "收盘价突破过去%d根K线最高价并完成上破确认; prevClose=%.2f, breakoutHigh=%.2f, close=%.2f",
+                        DEFAULT_LOOKBACK,
+                        prevClose,
+                        maxHigh,
+                        currK.close())
         ));
     }
 
     @Override
     public Optional<TradeSignal> checkCloseSignal(List<KlineData> klines, IndicatorData indicators, int currentIndex, TradeSignal openSignal) {
-        if (openSignal == null || openSignal.direction() != Direction.LONG || klines == null || indicators == null || currentIndex < 5 || currentIndex >= klines.size()) {
+        if (openSignal == null || openSignal.direction() != Direction.LONG || klines == null || klines.isEmpty() || indicators == null || currentIndex < DEFAULT_EXIT_LOOKBACK || currentIndex >= klines.size()) {
             return Optional.empty();
         }
 
-        int prevIndex = currentIndex - 1;
-        if (prevIndex < 0) {
+        if (currentIndex < 1) {
             return Optional.empty();
         }
 
         KlineData currK = klines.get(currentIndex);
-        KlineData prevK = klines.get(prevIndex);
-        if (currK == null || prevK == null || indicators.ma() == null) {
+        if (currK == null) {
             return Optional.empty();
         }
 
-        Double currMa5 = indicators.ma().getMa5At(currentIndex);
-        Double currMa10 = indicators.ma().getMa10At(currentIndex);
-        Double prevMa5 = indicators.ma().getMa5At(prevIndex);
-        Double prevMa10 = indicators.ma().getMa10At(prevIndex);
-
-        if (currMa5 == null || currMa10 == null || prevMa5 == null || prevMa10 == null) {
+        double minLow = getValidMinLowBetweenLastPeriod(klines, currentIndex - 1, DEFAULT_EXIT_LOOKBACK, DEFAULT_EXIT_LOOKBACK);
+        if (Double.isNaN(minLow)) {
             return Optional.empty();
         }
 
-        boolean closeCondition = prevK.close() < prevMa5
-                && prevK.close() < prevMa10
-                && currK.close() < currMa5
-                && currK.close() < currMa10;
+        Double currMa20 = indicators.ma() == null ? null : indicators.ma().getMa20At(currentIndex);
+        boolean exitByBreakdown = currK.close() < minLow;
+        boolean exitByMa = currMa20 != null && currK.close() < currMa20;
 
-        if (!closeCondition) {
+        if (!exitByBreakdown && !exitByMa) {
             return Optional.empty();
         }
 
         return Optional.of(TradeSignal.closeLong(
                 currentIndex,
                 currK.close(),
-                "连续2根K线收盘价跌破MA5和MA10"
+                exitByBreakdown
+                        ? String.format(Locale.ROOT,
+                                "收盘价跌破过去%d根K线最低价; exitLow=%.2f, close=%.2f",
+                                DEFAULT_EXIT_LOOKBACK,
+                                minLow,
+                                currK.close())
+                        : String.format(Locale.ROOT,
+                                "收盘价跌破MA20过滤线; ma20=%.2f, close=%.2f",
+                                currMa20,
+                                currK.close())
         ));
+    }
+
+    private static double getValidMinLowBetweenLastPeriod(List<KlineData> klines, int endIndex, int period, int minPeriod) {
+        if (klines == null || klines.isEmpty() || endIndex < 0 || endIndex >= klines.size() || period <= 0 || minPeriod <= 0) {
+            return Double.NaN;
+        }
+
+        int startIndex = Math.max(0, endIndex - period + 1);
+        int actualCount = endIndex - startIndex + 1;
+        if (actualCount < minPeriod) {
+            return Double.NaN;
+        }
+
+        double minLow = Double.POSITIVE_INFINITY;
+        boolean found = false;
+        for (int i = startIndex; i <= endIndex; i++) {
+            KlineData kline = klines.get(i);
+            if (kline == null) {
+                continue;
+            }
+            minLow = Math.min(minLow, kline.low());
+            found = true;
+        }
+
+        return found ? minLow : Double.NaN;
     }
 }

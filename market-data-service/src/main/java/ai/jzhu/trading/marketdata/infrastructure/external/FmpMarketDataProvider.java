@@ -57,45 +57,63 @@ public class FmpMarketDataProvider implements MarketDataProvider {
         String normalizedSymbol = normalizeSymbolForMarket(symbol, normalizedMarket);
 
         try {
-            List<FmpHistoricalResponse> response = fmpWebClient.get()
-                    .uri(uriBuilder -> {
-                        var builder = uriBuilder
-                                .path("/historical-price-eod/light")
-                                .queryParam("symbol", normalizedSymbol)
-                                .queryParam("apikey", apiKey);
-                        return builder.build();
-                    })
+            String responseBody = fmpWebClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/historical-price-eod/light")
+                            .queryParam("symbol", normalizedSymbol)
+                            .queryParam("apikey", apiKey)
+                            .build())
                     .retrieve()
-                    .bodyToFlux(FmpHistoricalResponse.class)
-                    .collectList()
+                    .bodyToMono(String.class)
                     .block();
 
-            if (response == null || response.isEmpty()) {
+            if (responseBody == null || responseBody.isBlank()) {
                 log.info("FMP returned empty historical data for symbol={}, market={}, normalizedSymbol={}",
                         symbol, market, normalizedSymbol);
                 return List.of();
             }
 
-            List<Kline> klines = new ArrayList<>(response.stream()
-                    .filter(item -> {
-                        LocalDate date = LocalDate.parse(item.date());
-                        if (startDate != null && date.isBefore(startDate)) {
-                            return false;
-                        }
-                        if (endDate != null && date.isAfter(endDate)) {
-                            return false;
-                        }
-                        return true;
-                    })
-                    .map(item -> new Kline(
-                            LocalDate.parse(item.date()),
-                            item.open(),
-                            item.high(),
-                            item.low(),
-                            item.close(),
-                            item.volume()
-                    ))
-                    .toList());
+            // parse flexibly: some FMP endpoints return objects with open/high/low/close,
+            // others provide a single "price" field. Handle both.
+            JsonNode root;
+            try {
+                root = TENCENT_OBJECT_MAPPER.readTree(responseBody);
+            } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+                throw new ExternalApiException("Failed to parse FMP response", ex);
+            }
+            if (!root.isArray()) {
+                log.info("FMP returned non-array response for symbol={}, normalizedSymbol={}", symbol, normalizedSymbol);
+                return List.of();
+            }
+
+            List<Kline> klines = new ArrayList<>();
+            for (JsonNode item : root) {
+                if (item == null || item.isNull()) continue;
+                String dateStr = item.path("date").asText(null);
+                if (dateStr == null) continue;
+                LocalDate date = LocalDate.parse(dateStr);
+                if (startDate != null && date.isBefore(startDate)) continue;
+                if (endDate != null && date.isAfter(endDate)) continue;
+
+                double open = item.has("open") ? item.path("open").asDouble() : Double.NaN;
+                double high = item.has("high") ? item.path("high").asDouble() : Double.NaN;
+                double low = item.has("low") ? item.path("low").asDouble() : Double.NaN;
+                double close = item.has("close") ? item.path("close").asDouble() : Double.NaN;
+                long volume = item.has("volume") ? item.path("volume").asLong() : 0L;
+
+                if (Double.isNaN(open) || Double.isNaN(high) || Double.isNaN(low) || Double.isNaN(close)) {
+                    // fallback: use single price field if available
+                    if (item.has("price")) {
+                        double price = item.path("price").asDouble();
+                        open = high = low = close = price;
+                    } else {
+                        // skip if no usable price data
+                        continue;
+                    }
+                }
+
+                klines.add(new Kline(date, open, high, low, close, volume));
+            }
 
             klines.sort(Comparator.comparing(Kline::date));
             return klines;

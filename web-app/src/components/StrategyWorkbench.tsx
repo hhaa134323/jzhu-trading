@@ -14,6 +14,7 @@ import type {
 interface StrategyWorkbenchProps {
   searchForm: SearchFormValues;
   canRunBacktest: boolean;
+  backtestRunning: boolean;
   onRunBacktest: (strategy: StrategyDraft) => void;
   onSelectedStrategyChange?: (strategy: StrategyDraft | null) => void;
 }
@@ -92,11 +93,9 @@ function createInitialDrafts(): StrategyDraft[] {
       sellStrategy: 'MA5 下穿 MA20 或止损触发时卖出',
       changeNote: 'init',
       codeText: buildCodeText(
-        buildDefinition('bullishLong', {
-          breakoutLookbackBars: 250,
-          pullbackMaPeriod: 5,
-          closeMaFast: 5,
-          closeMaSlow: 10,
+        buildDefinition('maCrossLong', {
+          closeMaFast: 10,
+          closeMaSlow: 20,
         }),
       ),
     },
@@ -110,11 +109,9 @@ function createInitialDrafts(): StrategyDraft[] {
       sellStrategy: 'DIF 下穿 DEA 或跌破均线时卖出',
       changeNote: 'init',
       codeText: buildCodeText(
-        buildDefinition('bullishLong', {
-          breakoutLookbackBars: 180,
-          macdFast: 12,
-          macdSlow: 26,
-          macdSignal: 9,
+        buildDefinition('maCrossLong', {
+          closeMaFast: 10,
+          closeMaSlow: 20,
         }),
       ),
     },
@@ -128,10 +125,9 @@ function createInitialDrafts(): StrategyDraft[] {
       sellStrategy: 'RSI 回升失败或价格跌破短均线时卖出',
       changeNote: 'init',
       codeText: buildCodeText(
-        buildDefinition('bullishLong', {
-          breakoutLookbackBars: 120,
-          pullbackMaPeriod: 10,
-          closeMaFast: 5,
+        buildDefinition('bollReversionLong', {
+          pullbackMaPeriod: 20,
+          closeMaFast: 20,
           closeMaSlow: 20,
         }),
       ),
@@ -146,11 +142,9 @@ function createInitialDrafts(): StrategyDraft[] {
       sellStrategy: '回落到中轨下方或止损触发时卖出',
       changeNote: 'init',
       codeText: buildCodeText(
-        buildDefinition('bullishLong', {
-          breakoutLookbackBars: 300,
-          pullbackMaPeriod: 20,
-          closeMaFast: 10,
-          closeMaSlow: 30,
+        buildDefinition('donchianBreakoutLong', {
+          breakoutLookbackBars: 20,
+          pullbackMaPeriod: 10,
         }),
       ),
     },
@@ -164,6 +158,7 @@ function mergeDraft(draft: StrategyDraft, patch: Partial<StrategyDraft>) {
 export default function StrategyWorkbench({
   searchForm,
   canRunBacktest,
+  backtestRunning,
   onRunBacktest,
   onSelectedStrategyChange,
 }: StrategyWorkbenchProps) {
@@ -208,11 +203,9 @@ export default function StrategyWorkbench({
       sellStrategy: '',
       changeNote: 'init',
       codeText: buildCodeText(
-        buildDefinition('bullishLong', {
-          breakoutLookbackBars: 200,
-          pullbackMaPeriod: 5,
-          closeMaFast: 5,
-          closeMaSlow: 10,
+        buildDefinition('maCrossLong', {
+          closeMaFast: 10,
+          closeMaSlow: 20,
         }),
       ),
     };
@@ -372,7 +365,7 @@ export default function StrategyWorkbench({
           <button
             type="button"
             className="btn btn-sm btn-brand-orange"
-            disabled={!canRunBacktest || !selectedDraft}
+            disabled={!canRunBacktest || !selectedDraft || backtestRunning}
             onClick={() => {
               if (!selectedDraft) {
                 return;
@@ -380,7 +373,7 @@ export default function StrategyWorkbench({
               onRunBacktest(selectedDraft);
             }}
           >
-            {t('workbench.runBacktest')}
+            {backtestRunning ? t('backtest.running') : t('workbench.runBacktest')}
           </button>
         </div>
       </section>

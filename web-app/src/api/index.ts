@@ -22,8 +22,15 @@ export async function fetchStrategies() {
 }
 
 export async function runBacktest(request: BacktestRequest) {
-  const response = await api.post<SimpleBacktestResponse>('/backtest/run', request);
-  return response.data;
+  try {
+    const response = await api.post<SimpleBacktestResponse>('/backtest/run', request);
+    return response.data;
+  } catch (err: any) {
+    if (err?.response?.data && typeof err.response.data === 'object' && err.response.data.message) {
+      throw new Error(err.response.data.message);
+    }
+    throw err;
+  }
 }
 
 export async function fetchStrategyTemplates() {

@@ -3,14 +3,12 @@ import { runBacktest } from '../api';
 import { useI18n } from '../i18n';
 import type {
   BacktestMetrics,
-  BacktestRequest,
   BacktestTradeDetail,
   SearchFormValues,
   SimpleBacktestResponse,
-  StrategyDefinition,
   StrategyDraft,
-  StrategySource,
 } from '../types';
+import { buildBacktestRequest, formatNumber, formatPercent } from './backtestUtils.ts';
 
 interface BacktestPanelProps {
   open: boolean;
@@ -19,80 +17,6 @@ interface BacktestPanelProps {
   onClose: () => void;
   onApplied: (result: SimpleBacktestResponse) => void;
   onClear: () => void;
-}
-
-function sanitizeParameters(input: Record<string, unknown> | undefined) {
-  if (!input) {
-    return undefined;
-  }
-
-  const entries = Object.entries(input).filter(([, value]) => typeof value === 'number' && Number.isFinite(value));
-  if (entries.length === 0) {
-    return undefined;
-  }
-
-  return Object.fromEntries(entries);
-}
-
-function parseCodeText(codeText: string): StrategyDefinition {
-  const parsed = JSON.parse(codeText) as {
-    engineType?: unknown;
-    baseStrategyId?: unknown;
-    parameters?: Record<string, unknown>;
-  };
-
-  const engineType = typeof parsed.engineType === 'string' ? parsed.engineType.trim() : '';
-  const baseStrategyId = typeof parsed.baseStrategyId === 'string' ? parsed.baseStrategyId.trim() : '';
-
-  if (!engineType) {
-    throw new Error('策略代码缺少 engineType');
-  }
-  if (!baseStrategyId) {
-    throw new Error('策略代码缺少 baseStrategyId');
-  }
-
-  return {
-    engineType,
-    baseStrategyId,
-    parameters: sanitizeParameters(parsed.parameters),
-  };
-}
-
-function buildStrategySource(strategy: StrategyDraft): { strategySource: StrategySource; strategyId: string } {
-  const definition = parseCodeText(strategy.codeText);
-
-  if (strategy.templateId) {
-    return {
-      strategyId: definition.baseStrategyId,
-      strategySource: {
-        sourceType: 'TEMPLATE_VERSION',
-        templateId: strategy.templateId,
-        templateVersion: strategy.latestVersion ?? 1,
-      },
-    };
-  }
-
-  return {
-    strategyId: definition.baseStrategyId,
-    strategySource: {
-      sourceType: 'DRAFT',
-      draftDefinition: definition,
-    },
-  };
-}
-
-function formatPercent(value?: number) {
-  if (value == null || Number.isNaN(value)) {
-    return '--';
-  }
-  return `${value.toFixed(2)}%`;
-}
-
-function formatNumber(value?: number) {
-  if (value == null || Number.isNaN(value)) {
-    return '--';
-  }
-  return value.toFixed(2);
 }
 
 function computeMetrics(trades: BacktestTradeDetail[]): BacktestMetrics {
@@ -163,17 +87,7 @@ export default function BacktestPanel({ open, strategy, form, onClose, onApplied
     setError(null);
 
     try {
-      const sourcePayload = buildStrategySource(strategy);
-      const request: BacktestRequest = {
-        symbol: form.symbol.trim().toUpperCase(),
-        market: form.market,
-        period: form.period,
-        startDate: form.startDate,
-        endDate: form.endDate,
-        strategyId: sourcePayload.strategyId,
-        strategySource: sourcePayload.strategySource,
-      };
-
+      const request = buildBacktestRequest(strategy, form);
       const data = await runBacktest(request);
       setResult(data);
       onApplied(data);
@@ -259,11 +173,11 @@ export default function BacktestPanel({ open, strategy, form, onClose, onApplied
             <div className="strategy-metric-grid mb-3">
               <div className="strategy-metric-card">
                 <div className="strategy-metric-label">{t('backtest.metricTotalReturn')}</div>
-                <div className="strategy-metric-value">{formatPercent(metrics.totalReturnPct)}</div>
+                <div className="strategy-metric-value">{metrics.totalReturnPct == null ? (result?.metrics?.reason ? t(`backtest.metricReason.${result.metrics.reason}`) || result.metrics.reason : '--') : formatPercent(metrics.totalReturnPct)}</div>
               </div>
               <div className="strategy-metric-card">
                 <div className="strategy-metric-label">{t('backtest.metricMaxDrawdown')}</div>
-                <div className="strategy-metric-value">{formatPercent(metrics.maxDrawdownPct)}</div>
+                <div className="strategy-metric-value">{metrics.maxDrawdownPct == null ? (result?.metrics?.reason ? t(`backtest.metricReason.${result.metrics.reason}`) || result.metrics.reason : '--') : formatPercent(metrics.maxDrawdownPct)}</div>
               </div>
               <div className="strategy-metric-card">
                 <div className="strategy-metric-label">{t('backtest.metricWinRate')}</div>
@@ -275,7 +189,7 @@ export default function BacktestPanel({ open, strategy, form, onClose, onApplied
               </div>
               <div className="strategy-metric-card">
                 <div className="strategy-metric-label">{t('backtest.metricSharpe')}</div>
-                <div className="strategy-metric-value">{formatNumber(metrics.sharpeRatio)}</div>
+                <div className="strategy-metric-value">{metrics.sharpeRatio == null ? (result?.metrics?.reason ? t(`backtest.metricReason.${result.metrics.reason}`) || result.metrics.reason : '--') : formatNumber(metrics.sharpeRatio)}</div>
               </div>
               <div className="strategy-metric-card">
                 <div className="strategy-metric-label">{t('backtest.metricClosedTrades')}</div>

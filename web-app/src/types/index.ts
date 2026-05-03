@@ -125,14 +125,17 @@ export interface SimpleBacktestResponse {
 }
 
 export interface BacktestMetrics {
-  totalReturnPct?: number;
-  maxDrawdownPct?: number;
-  winRatePct?: number;
-  profitFactor?: number;
-  sharpeRatio?: number;
-  closedTrades?: number;
-  averageHoldBars?: number;
-  averageHoldDays?: number;
+  totalReturnPct?: number | null;
+  maxDrawdownPct?: number | null;
+  sharpeRatio?: number | null;
+  annualReturnPct?: number | null;
+  volatilityPct?: number | null;
+  winRatePct?: number | null;
+  profitFactor?: number | null;
+  closedTrades?: number | null;
+  averageHoldBars?: number | null;
+  averageHoldDays?: number | null;
+  reason?: string | null;
 }
 
 export interface StrategyDraft {

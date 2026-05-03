@@ -7,6 +7,7 @@ public record SimpleBacktestResponse(
         String strategyId,
         String strategyName,
         int totalTrades,
-        List<BacktestTradeDetailResponse> trades
+        List<BacktestTradeDetailResponse> trades,
+        BacktestMetrics metrics
 ) {
 }

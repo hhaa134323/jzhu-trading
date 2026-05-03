@@ -11,6 +11,7 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Optional;
 import java.util.List;
 
 @Repository
@@ -21,6 +22,17 @@ public class JdbcKlineRepository implements KlineRepository {
 
     public JdbcKlineRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+    }
+
+    @Override
+    public Optional<LocalDate> findLatestDate(String tableName, String symbol, String market) {
+        String sql = "SELECT max(time) as maxt FROM " + tableName + " WHERE symbol = ? AND market = ?";
+        List<java.sql.Timestamp> list = jdbcTemplate.query(sql, new Object[]{symbol, market}, (rs, rowNum) -> rs.getTimestamp("maxt"));
+        if (list == null || list.isEmpty() || list.get(0) == null) {
+            return Optional.empty();
+        }
+        java.sql.Timestamp ts = list.get(0);
+        return Optional.of(ts.toInstant().atZone(NEW_YORK).toLocalDate());
     }
 
     @Override
