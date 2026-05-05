@@ -59,6 +59,15 @@ export default function KlineChart({ symbol, klines, indicators, visibility, maC
   const option = useMemo<EChartsOption>(() => {
     const dates = klines.map((item) => item.date);
     const candleData = klines.map((item) => [item.open, item.close, item.low, item.high]);
+    const klinesByDate = new Map(klines.map((item) => [item.date, item] as const));
+
+    // Dev assertion: verify OHLC constraints (tree-shaken in prod build)
+    for (const bar of klines) {
+      if (bar.low > Math.min(bar.open, bar.close) || bar.high < Math.max(bar.open, bar.close)) {
+        console.warn(`[OHLC] Bar ${bar.date} violates OHLC constraint:`, bar);
+      }
+    }
+
     const volumes = klines.map((item) => ({
       value: item.volume,
       itemStyle: {
@@ -211,8 +220,20 @@ export default function KlineChart({ symbol, klines, indicators, visibility, maC
           if (!candle) {
             return '';
           }
-          const [open, close, high, low] = candle.data as number[];
-          const dateLabel = candle.name ?? '';
+          const axisValue = (candle as { axisValue?: string | number }).axisValue;
+          const dateLabel = String(axisValue ?? candle.name ?? '');
+          const matched = dateLabel ? klinesByDate.get(dateLabel) : undefined;
+          const rawValues = candle.data as number[];
+          let [open, close, low, high] = rawValues;
+
+          if (matched) {
+            open = matched.open;
+            close = matched.close;
+            low = matched.low;
+            high = matched.high;
+          } else if (low > high) {
+            [low, high] = [high, low];
+          }
           return [
             `<div style="font-weight:700;margin-bottom:6px;">${dateLabel}</div>`,
             `${t('chart.tooltip.open')}: ${open.toFixed(2)}`,

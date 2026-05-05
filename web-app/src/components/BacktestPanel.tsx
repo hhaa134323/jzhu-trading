@@ -61,7 +61,8 @@ export default function BacktestPanel({ open, strategy, form, onClose, onApplied
   const [error, setError] = useState<string | null>(null);
   const [capitalInput, setCapitalInput] = useState('100000');
   const [leverageInput, setLeverageInput] = useState('1');
-  const [feeRateInput, setFeeRateInput] = useState('0');
+  const [slippageBpsInput, setSlippageBpsInput] = useState('5');
+  const [commissionBpsInput, setCommissionBpsInput] = useState('1');
 
   const strategyTitle = strategy
     ? strategy.templateId
@@ -96,9 +97,14 @@ export default function BacktestPanel({ open, strategy, form, onClose, onApplied
       setError(t('backtest.paramInvalidLeverage'));
       return;
     }
-    const feeRate = Number(feeRateInput);
-    if (!Number.isFinite(feeRate) || feeRate < 0) {
-      setError(t('backtest.paramInvalidFeeRate'));
+    const slippageBps = Number(slippageBpsInput);
+    if (!Number.isFinite(slippageBps) || slippageBps < 0) {
+      setError(t('backtest.paramInvalidSlippageBps'));
+      return;
+    }
+    const commissionBps = Number(commissionBpsInput);
+    if (!Number.isFinite(commissionBps) || commissionBps < 0) {
+      setError(t('backtest.paramInvalidCommissionBps'));
       return;
     }
 
@@ -106,7 +112,9 @@ export default function BacktestPanel({ open, strategy, form, onClose, onApplied
     setError(null);
 
     try {
-      const request = buildBacktestRequest(strategy, form, { capital, leverage, feeRate });
+      // feeRate is derived from commissionBps for backward compat with backend
+      const feeRate = commissionBps / 10000;
+      const request = buildBacktestRequest(strategy, form, { capital, leverage, feeRate, slippageBps });
       const data = await runBacktest(request);
       setResult(data);
       onApplied(data);
@@ -165,7 +173,7 @@ export default function BacktestPanel({ open, strategy, form, onClose, onApplied
         <div className="strategy-meta-block mb-3">
           <div className="text-muted-custom small mb-2">{t('backtest.runParameters')}</div>
           <div className="row g-2">
-            <div className="col-12 col-md-4">
+            <div className="col-6 col-md-3">
               <label className="form-label small text-muted-custom" htmlFor="backtest-capital">
                 {t('backtest.capital')}
               </label>
@@ -179,7 +187,7 @@ export default function BacktestPanel({ open, strategy, form, onClose, onApplied
                 onChange={(event) => setCapitalInput(event.target.value)}
               />
             </div>
-            <div className="col-12 col-md-4">
+            <div className="col-6 col-md-2">
               <label className="form-label small text-muted-custom" htmlFor="backtest-leverage">
                 {t('backtest.leverage')}
               </label>
@@ -193,20 +201,35 @@ export default function BacktestPanel({ open, strategy, form, onClose, onApplied
                 onChange={(event) => setLeverageInput(event.target.value)}
               />
             </div>
-            <div className="col-12 col-md-4">
-              <label className="form-label small text-muted-custom" htmlFor="backtest-fee-rate">
-                {t('backtest.feeRate')}
+            <div className="col-6 col-md-2">
+              <label className="form-label small text-muted-custom" htmlFor="backtest-commission-bps">
+                {t('backtest.commissionBps')}
               </label>
               <input
-                id="backtest-fee-rate"
+                id="backtest-commission-bps"
                 type="number"
                 min={0}
-                step={0.0001}
+                step={0.1}
                 className="form-control form-control-sm"
-                value={feeRateInput}
-                onChange={(event) => setFeeRateInput(event.target.value)}
+                value={commissionBpsInput}
+                onChange={(event) => setCommissionBpsInput(event.target.value)}
               />
             </div>
+            <div className="col-6 col-md-2">
+              <label className="form-label small text-muted-custom" htmlFor="backtest-slippage-bps">
+                {t('backtest.slippageBps')}
+              </label>
+              <input
+                id="backtest-slippage-bps"
+                type="number"
+                min={0}
+                step={0.1}
+                className="form-control form-control-sm"
+                value={slippageBpsInput}
+                onChange={(event) => setSlippageBpsInput(event.target.value)}
+              />
+            </div>
+
           </div>
           <div className="text-muted-custom small mt-2">{t('backtest.runParametersHint')}</div>
         </div>

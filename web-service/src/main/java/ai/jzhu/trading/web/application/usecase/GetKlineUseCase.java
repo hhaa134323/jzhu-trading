@@ -39,6 +39,10 @@ public class GetKlineUseCase {
     ) {
         List<KlineResponse> klines = marketDataPort.getKline(symbol, market, period, startDate, endDate);
         IndicatorResponse indicators;
+        String earliestAvailableDate = null;
+        if (!klines.isEmpty()) {
+            earliestAvailableDate = klines.get(0).date();
+        }
         try {
             indicators = indicatorPort.calculate(klines, symbol, market, period);
         } catch (DownstreamServiceUnavailableException ex) {
@@ -46,7 +50,7 @@ public class GetKlineUseCase {
                     symbol, market, period, ex.getMessage());
             indicators = buildEmptyIndicators(klines.size());
         }
-        return new KlineWithIndicatorsResponse(klines, indicators, klines.size());
+        return new KlineWithIndicatorsResponse(klines, indicators, klines.size(), earliestAvailableDate);
     }
 
     private IndicatorResponse buildEmptyIndicators(int size) {

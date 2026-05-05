@@ -149,6 +149,11 @@ export default function KlinePage() {
         totalCount: data.totalCount,
       };
 
+      const earliestAvailable = data.earliestAvailableDate;
+      if (earliestAvailable && payload.startDate && payload.startDate < earliestAvailable) {
+        setError(t('klinePage.earliestDataHint', { startDate: payload.startDate, earliestDate: earliestAvailable }));
+      }
+
       setTabs((current) => {
         const next = current.filter((item) => item.id !== id);
         return [tab, ...next];

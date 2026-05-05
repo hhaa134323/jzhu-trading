@@ -23,9 +23,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ExternalApiException.class)
     public ResponseEntity<ErrorResponse> handleExternalApi(ExternalApiException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+        HttpStatus status = HttpStatus.resolve(ex.getStatus());
+        if (status == null) {
+            status = HttpStatus.SERVICE_UNAVAILABLE;
+        }
+        return ResponseEntity.status(status)
                 .body(new ErrorResponse(
-                        HttpStatus.BAD_GATEWAY.value(),
+                        status.value(),
                         ex.getMessage(),
                         OffsetDateTime.now().toString()
                 ));

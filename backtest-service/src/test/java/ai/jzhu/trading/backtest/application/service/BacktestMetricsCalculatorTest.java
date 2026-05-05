@@ -124,8 +124,8 @@ public class BacktestMetricsCalculatorTest {
                 new BacktestTradeDetail(0, 1, "2023-01-01", "2023-01-02", 100.0, 110.0, "LONG", "o", "c", true)
         );
         BacktestMetricsCalculator calc = new BacktestMetricsCalculator();
-        BacktestMetrics m100 = calc.calculate(klines, trades, new RunParameters(100_000.0, 1.0, 0.0));
-        BacktestMetrics m200 = calc.calculate(klines, trades, new RunParameters(200_000.0, 1.0, 0.0));
+        BacktestMetrics m100 = calc.calculate(klines, trades, RunParameters.of(100_000.0, 1.0, 0.0));
+        BacktestMetrics m200 = calc.calculate(klines, trades, RunParameters.of(200_000.0, 1.0, 0.0));
         Assertions.assertEquals(m100.totalReturnPct(), m200.totalReturnPct(), 0.001);
         Assertions.assertEquals(m100.finalEquity() * 2.0, m200.finalEquity(), 0.01);
         Assertions.assertEquals(m100.totalPnl() * 2.0, m200.totalPnl(), 0.01);
@@ -142,8 +142,8 @@ public class BacktestMetricsCalculatorTest {
                 new BacktestTradeDetail(0, 1, "2023-01-01", "2023-01-02", 100.0, 110.0, "LONG", "o", "c", true)
         );
         BacktestMetricsCalculator calc = new BacktestMetricsCalculator();
-        BacktestMetrics m1 = calc.calculate(klines, trades, new RunParameters(100_000.0, 1.0, 0.0));
-        BacktestMetrics m2 = calc.calculate(klines, trades, new RunParameters(100_000.0, 2.0, 0.0));
+        BacktestMetrics m1 = calc.calculate(klines, trades, RunParameters.of(100_000.0, 1.0, 0.0));
+        BacktestMetrics m2 = calc.calculate(klines, trades, RunParameters.of(100_000.0, 2.0, 0.0));
         // with no fee, leverage 2 → 2x total return and 2x drawdown
         Assertions.assertEquals(m1.totalReturnPct() * 2.0, m2.totalReturnPct(), 0.01);
         Assertions.assertEquals(m1.maxDrawdownPct() * 2.0, m2.maxDrawdownPct(), 0.01);
@@ -164,8 +164,8 @@ public class BacktestMetricsCalculatorTest {
                 new BacktestTradeDetail(2, 3, "2023-01-03", "2023-01-04", 110.0, 99.0, "LONG", "o", "c", true)
         );
         BacktestMetricsCalculator calc = new BacktestMetricsCalculator();
-        BacktestMetrics noFee = calc.calculate(klines, trades, new RunParameters(100_000.0, 1.0, 0.0));
-        BacktestMetrics withFee = calc.calculate(klines, trades, new RunParameters(100_000.0, 1.0, 0.001));
+        BacktestMetrics noFee = calc.calculate(klines, trades, RunParameters.of(100_000.0, 1.0, 0.0));
+        BacktestMetrics withFee = calc.calculate(klines, trades, RunParameters.of(100_000.0, 1.0, 0.001));
         // totalReturnPct and profitFactor should both decrease when fee is applied
         Assertions.assertTrue(withFee.totalReturnPct() < noFee.totalReturnPct());
         Assertions.assertNotNull(withFee.profitFactor());
@@ -186,7 +186,7 @@ public class BacktestMetricsCalculatorTest {
                 new BacktestTradeDetail(0, 1, "2023-01-01", "2023-01-02", 100.0, 90.0, "LONG", "o", "c", true)
         );
         BacktestMetricsCalculator calc = new BacktestMetricsCalculator();
-        BacktestMetrics m = calc.calculate(klines, trades, new RunParameters(100_000.0, 2.0, 0.001));
+        BacktestMetrics m = calc.calculate(klines, trades, RunParameters.of(100_000.0, 2.0, 0.001));
         // raw = -10%, leveraged = -20%, feeFactor = (1-0.001)^2 = 0.998001
         // netRet = (1-0.20)*0.998001 - 1 = -0.2015992 → totalReturnPct ≈ -20.16%
         Assertions.assertEquals(-20.16, m.totalReturnPct(), 0.02);
@@ -195,5 +195,45 @@ public class BacktestMetricsCalculatorTest {
         Assertions.assertEquals(79840.08, m.finalEquity(), 0.01);
         // totalPnl = finalEquity - capital
         Assertions.assertEquals(m.totalPnl(), m.finalEquity() - 100_000.0, 0.001);
+    }
+
+    @Test
+    public void testCommissionBpsReducesReturn() {
+        // commissionBps=10 (0.1%) should reduce return vs commissionBps=0
+        List<KlineData> klines = Arrays.asList(
+                new KlineData("2023-01-01", 100, 100, 100, 100, 0L),
+                new KlineData("2023-01-02", 110, 110, 110, 110, 0L)
+        );
+        List<BacktestTradeDetail> trades = Arrays.asList(
+                new BacktestTradeDetail(0, 1, "2023-01-01", "2023-01-02", 100.0, 110.0, "LONG", "o", "c", true)
+        );
+        BacktestMetricsCalculator calc = new BacktestMetricsCalculator();
+        BacktestMetrics noCost = calc.calculate(klines, trades, RunParameters.zeroCost());
+        BacktestMetrics withCost = calc.calculate(klines, trades, new RunParameters(100_000.0, 1.0, 0.0, 0.0, 10.0));
+        // with 10 bps commission per side → feeFactor = (1 - 0.001)^2 = 0.998001
+        // netRet = (1 + 0.10) * 0.998001 - 1 = 0.0978011 → 9.78% vs 10%
+        Assertions.assertTrue(withCost.totalReturnPct() < noCost.totalReturnPct(),
+                "Commission should reduce total return");
+        Assertions.assertTrue(withCost.totalPnl() < noCost.totalPnl(),
+                "Commission should reduce total PnL");
+        // exact check: raw 10%, feeFactor 0.998001 → net 9.7801%
+        Assertions.assertEquals(9.78, withCost.totalReturnPct(), 0.02);
+    }
+
+    @Test
+    public void testCommissionBpsPreferredOverFeeRate() {
+        // When both commissionBps and feeRate are provided, commissionBps takes priority
+        List<KlineData> klines = Arrays.asList(
+                new KlineData("2023-01-01", 100, 100, 100, 100, 0L),
+                new KlineData("2023-01-02", 110, 110, 110, 110, 0L)
+        );
+        List<BacktestTradeDetail> trades = Arrays.asList(
+                new BacktestTradeDetail(0, 1, "2023-01-01", "2023-01-02", 100.0, 110.0, "LONG", "o", "c", true)
+        );
+        BacktestMetricsCalculator calc = new BacktestMetricsCalculator();
+        // feeRate=0.05 (5%) vs commissionBps=10 (0.1%) — commissionBps should be used
+        BacktestMetrics m = calc.calculate(klines, trades, new RunParameters(100_000.0, 1.0, 0.05, 0.0, 10.0));
+        // netRet = (1+0.10) * (1-0.001)^2 - 1 = 1.10 * 0.998001 - 1 = 0.0978011 → 9.78%
+        Assertions.assertEquals(9.78, m.totalReturnPct(), 0.02, "commissionBps should be used, not feeRate");
     }
 }

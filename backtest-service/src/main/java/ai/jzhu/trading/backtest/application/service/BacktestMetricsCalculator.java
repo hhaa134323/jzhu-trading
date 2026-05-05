@@ -32,6 +32,7 @@ public class BacktestMetricsCalculator {
         double capital = params.capitalOrDefault();
         double leverage = params.leverageOrDefault();
         double feeRate = params.feeRateOrDefault();
+        double commissionBps = params.commissionBpsOrDefault();
 
         List<BacktestTradeDetail> closedTrades = new ArrayList<>();
         for (BacktestTradeDetail t : trades) {
@@ -60,9 +61,11 @@ public class BacktestMetricsCalculator {
             if (open <= 0) continue;
             int sign = "SHORT".equalsIgnoreCase(t.direction()) ? -1 : 1;
             double rawRet = sign * (close / open - 1.0);
-            // leverage amplifies return, fee deducted per side (open + close)
+            // leverage amplifies return
             double leveragedRet = rawRet * leverage;
-            double feeFactor = (1.0 - feeRate) * (1.0 - feeRate);
+            // Commission deducted per side — use commissionBps if >0, else legacy feeRate
+            double effectiveCommission = commissionBps > 0 ? commissionBps / 10000.0 : feeRate;
+            double feeFactor = (1.0 - effectiveCommission) * (1.0 - effectiveCommission);
             double netRet = (1.0 + leveragedRet) * feeFactor - 1.0;
             returnsAtIndex.computeIfAbsent(t.closeIndex(), k -> new ArrayList<>()).add(netRet);
 
@@ -157,7 +160,8 @@ public class BacktestMetricsCalculator {
             int sign = "SHORT".equalsIgnoreCase(t.direction()) ? -1 : 1;
             double rawRet = sign * (close / open - 1.0);
             double leveragedRet = rawRet * leverage;
-            double feeFactor = (1.0 - feeRate) * (1.0 - feeRate);
+            double effectiveCommission = commissionBps > 0 ? commissionBps / 10000.0 : feeRate;
+            double feeFactor = (1.0 - effectiveCommission) * (1.0 - effectiveCommission);
             double netRet = (1.0 + leveragedRet) * feeFactor - 1.0;
             if (netRet > 0) wins++;
         }

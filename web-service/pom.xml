@@ -25,6 +25,10 @@
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
             <groupId>ai.jzhu.trading</groupId>
             <artifactId>trading-common</artifactId>
             <version>${project.version}</version>

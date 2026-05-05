@@ -48,6 +48,7 @@ export interface KlineWithIndicatorsResponse {
   klines: Kline[];
   indicators: IndicatorResponse;
   totalCount: number;
+  earliestAvailableDate?: string;
 }
 
 export interface SearchFormValues {
@@ -81,6 +82,8 @@ export interface RunParameters {
   capital?: number;
   leverage?: number;
   feeRate?: number;
+  slippageBps?: number;
+  commissionBps?: number;
 }
 
 export type StrategySourceType = 'BUILTIN' | 'TEMPLATE_VERSION' | 'DRAFT';

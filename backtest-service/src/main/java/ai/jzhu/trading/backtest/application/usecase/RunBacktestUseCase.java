@@ -69,8 +69,8 @@ public class RunBacktestUseCase {
         IndicatorResponse indicatorResponse = indicatorPort.calculate(klineResponses, symbol, market, period);
         IndicatorData indicators = dataConverter.toIndicatorData(indicatorResponse);
 
-        List<BacktestTradeDetail> trades = backtestEngine.run(klines, indicators, strategy);
-        RunParameters runParams = request.runParameters();
+        RunParameters runParams = request.runParameters() != null ? request.runParameters() : RunParameters.defaults();
+        List<BacktestTradeDetail> trades = backtestEngine.run(klines, indicators, strategy, runParams);
         List<BacktestTradeDetailResponse> tradeResponses = trades.stream()
             .map(t -> toTradeDetailResponse(t, runParams))
             .toList();
@@ -164,12 +164,13 @@ public class RunBacktestUseCase {
         if (runParams != null && trade.closed()) {
             double capital = runParams.capitalOrDefault();
             double leverage = runParams.leverageOrDefault();
-            double feeRate = runParams.feeRateOrDefault();
-            if (feeRate > 0) {
-                // approximate fee based on initial capital and leverage (notional = capital * leverage)
-                double notional = capital * leverage;
-                fee = notional * feeRate * 2; // open + close
-                fee = Math.round(fee * 100.0) / 100.0;
+            double commissionBps = runParams.commissionBpsOrDefault();
+            if (commissionBps > 0) {
+                // commission based on actual notional per side (open notional + close notional)
+                double openNotional = trade.openPrice() * (capital / trade.openPrice()) * leverage;
+                double closeNotional = trade.closePrice() * (capital / trade.openPrice()) * leverage;
+                double commission = (openNotional + closeNotional) * commissionBps / 10000.0;
+                fee = Math.round(commission * 100.0) / 100.0;
             }
         }
         return new BacktestTradeDetailResponse(
