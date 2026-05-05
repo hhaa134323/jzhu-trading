@@ -280,39 +280,24 @@ start_web_app() {
 
   rm -f "${WEBAPP_PID_FILE}"
 
-  DOCKER_MODE=0
-  if [[ "${FORCE_DOCKER:-}" == "1" || "${FORCE_DOCKER:-}" == "true" ]]; then
-    DOCKER_MODE=1
-  elif ! command -v npm >/dev/null 2>&1; then
-    DOCKER_MODE=1
-  fi
-
-  if [[ "${DOCKER_MODE}" == "1" ]]; then
-    if command -v docker >/dev/null 2>&1; then
-      (
-        cd "${ROOT_DIR}/web-app"
-        docker_cmd rm -f "${WEBAPP_CONTAINER_NAME}" >/dev/null 2>&1 || true
-        nohup env MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker run --rm \
-          --name "${WEBAPP_CONTAINER_NAME}" \
-          --label jzhu.managed=true \
-          --label jzhu.service=web-app \
-          -p 3000:3000 \
-          -v "${webapp_docker_path}:/app" \
-          -w /app \
-          node:22-alpine \
-          sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3000" >"${LOG_DIR}/web-app.log" 2>&1 &
-        echo $! >"${WEBAPP_PID_FILE}"
-      )
-    else
-      echo "[ERROR] Neither npm nor docker is available. Cannot start web-app."
-      exit 1
-    fi
-  else
+  if command -v docker >/dev/null 2>&1; then
     (
       cd "${ROOT_DIR}/web-app"
-      nohup npm run dev -- --host 0.0.0.0 --port 3000 >"${LOG_DIR}/web-app.log" 2>&1 &
+      docker_cmd rm -f "${WEBAPP_CONTAINER_NAME}" >/dev/null 2>&1 || true
+      nohup env MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker run --rm \
+        --name "${WEBAPP_CONTAINER_NAME}" \
+        --label jzhu.managed=true \
+        --label jzhu.service=web-app \
+        -p 3000:3000 \
+        -v "${webapp_docker_path}:/app" \
+        -w /app \
+        node:22-alpine \
+        sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3000" >"${LOG_DIR}/web-app.log" 2>&1 &
       echo $! >"${WEBAPP_PID_FILE}"
     )
+  else
+    echo "[ERROR] Docker is not available. Cannot start web-app in Docker Desktop mode."
+    exit 1
   fi
 
   echo "[OK] web-app started (PID $(cat "${WEBAPP_PID_FILE}"))"

@@ -1,5 +1,6 @@
 import type {
   BacktestRequest,
+  RunParameters,
   SearchFormValues,
   StrategyDefinition,
   StrategyDraft,
@@ -66,7 +67,11 @@ export function buildStrategySource(strategy: StrategyDraft): { strategySource: 
   };
 }
 
-export function buildBacktestRequest(strategy: StrategyDraft, form: SearchFormValues): BacktestRequest {
+export function buildBacktestRequest(
+  strategy: StrategyDraft,
+  form: SearchFormValues,
+  runParameters?: RunParameters,
+): BacktestRequest {
   const sourcePayload = buildStrategySource(strategy);
 
   return {
@@ -77,17 +82,18 @@ export function buildBacktestRequest(strategy: StrategyDraft, form: SearchFormVa
     endDate: form.endDate,
     strategyId: sourcePayload.strategyId,
     strategySource: sourcePayload.strategySource,
+    runParameters,
   };
 }
 
-export function formatPercent(value?: number) {
+export function formatPercent(value?: number | null) {
   if (value == null || Number.isNaN(value)) {
     return '--';
   }
   return `${value.toFixed(2)}%`;
 }
 
-export function formatNumber(value?: number) {
+export function formatNumber(value?: number | null) {
   if (value == null || Number.isNaN(value)) {
     return '--';
   }

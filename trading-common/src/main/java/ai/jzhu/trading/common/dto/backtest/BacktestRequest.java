@@ -7,6 +7,7 @@ public record BacktestRequest(
         String startDate,
         String endDate,
         String strategyId,
-        StrategySource strategySource
+        StrategySource strategySource,
+        RunParameters runParameters
 ) {
 }

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
+import BacktestPanel from '../components/BacktestPanel';
 import InlineBacktestPanel from '../components/InlineBacktestPanel';
+import BacktestMetricsPanel from '../components/BacktestMetricsPanel';
 import KlineChart from '../components/KlineChart';
 import SearchBar from '../components/SearchBar';
 import StockTabs from '../components/StockTabs';
@@ -105,12 +107,14 @@ export default function KlinePage() {
   const [backtestResults, setBacktestResults] = useState<Record<string, SimpleBacktestResponse>>({});
   const [backtestVisible, setBacktestVisible] = useState(false);
   const [backtestBusy, setBacktestBusy] = useState(false);
-  const [backtestRunToken, setBacktestRunToken] = useState(0);
+  const [backtestRunToken] = useState(0);
   const [backtestStrategy, setBacktestStrategy] = useState<StrategyDraft | null>(null);
   const [backtestRequestTabId, setBacktestRequestTabId] = useState<string | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [selectedStrategy, setSelectedStrategy] = useState<StrategyDraft | null>(null);
+  const [backtestModalOpen, setBacktestModalOpen] = useState(false);
   const backtestAnchorRef = useRef<HTMLDivElement | null>(null);
+  const lastBacktestScrollTokenRef = useRef(0);
 
   const persistPrefs = (nextVisibility: VisibilityState, nextConfig: ConfigState) => {
     localStorage.setItem(PREF_KEY, JSON.stringify({ visibility: nextVisibility, config: nextConfig }));
@@ -165,6 +169,8 @@ export default function KlinePage() {
   };
 
   const handleSelectTab = (tabId: string) => {
+    // 切 tab 时自动隐藏回测面板，避免状态混淆
+    setBacktestVisible(false);
     setActiveTabId(tabId);
     const tab = tabs.find((item) => item.id === tabId);
     if (tab) {
@@ -193,38 +199,51 @@ export default function KlinePage() {
     });
   };
 
-  const activeTrades = activeTab ? backtestResults[activeTab.id]?.trades ?? [] : [];
+  const activeResult = activeTab ? backtestResults[activeTab.id] ?? null : null;
+  const activeTrades = activeResult?.trades ?? [];
+  const activeMetrics = activeResult?.metrics;
+  const activeTotalTrades = activeResult?.trades?.length ?? activeResult?.totalTrades;
 
   useEffect(() => {
-    if (!backtestVisible) {
+    if (!activeResult || backtestBusy || !activeTabId || backtestRequestTabId !== activeTabId) {
       return;
     }
 
-    backtestAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [backtestRunToken, backtestVisible, activeTabId]);
+    if (backtestRunToken <= lastBacktestScrollTokenRef.current) {
+      return;
+    }
+
+    backtestAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    lastBacktestScrollTokenRef.current = backtestRunToken;
+  }, [activeResult, activeTabId, backtestBusy, backtestRequestTabId, backtestRunToken]);
 
   const handleToggleBacktestPanel = () => {
-    if (!activeTab || !selectedStrategy) {
+    // 1) 已打开 -> 无条件关闭（修复：点击时应总能收起）
+    if (backtestVisible) {
+      setBacktestVisible(false);
       return;
     }
 
-    const nextVisible = !backtestVisible;
-    setBacktestVisible(nextVisible);
-    if (nextVisible) {
-      setBacktestRequestTabId(activeTab.id);
+    // 2) 要打开 -> 需要有 activeTab（但不要求 selectedStrategy）
+    if (!activeTab) {
+      return;
     }
+
+    // 3) 打开面板：优先展示该 tab 的已有结果
+    setBacktestRequestTabId(activeTab.id);
+    setBacktestVisible(true);
   };
 
   const handleRunSelectedStrategyBacktest = (strategy: StrategyDraft) => {
-    if (!activeTab || backtestBusy) {
+    if (!activeTab) {
       return;
     }
 
+    setSelectedStrategy(strategy);
+    setWorkbenchOpen(false);
     setBacktestStrategy(strategy);
     setBacktestRequestTabId(activeTab.id);
-    setBacktestVisible(true);
-    setBacktestBusy(true);
-    setBacktestRunToken((token) => token + 1);
+    setBacktestModalOpen(true);
   };
 
   return (
@@ -242,7 +261,7 @@ export default function KlinePage() {
             <button
               type="button"
               className={`btn btn-sm btn-brand-orange ${backtestVisible ? 'active' : ''}`}
-              disabled={!activeTab || !selectedStrategy}
+              disabled={!activeTab && !backtestVisible}
               onClick={handleToggleBacktestPanel}
             >
               {t('workbench.modeBacktest')}
@@ -266,6 +285,7 @@ export default function KlinePage() {
                 <button
                   key={item.key}
                   type="button"
+
                   className={`btn btn-sm ${enabled ? 'btn-brand-blue' : 'btn-outline-light'}`}
                   onClick={() => {
                     const nextVisibility = { ...visibility, [key]: !enabled };
@@ -383,6 +403,18 @@ export default function KlinePage() {
           </div>
         </div>
 
+        {backtestVisible ? (
+          <div ref={backtestAnchorRef} className="panel-soft p-3 rounded-3 mb-3">
+            {activeResult ? (
+              <BacktestMetricsPanel metrics={activeMetrics} totalTrades={activeTotalTrades} />
+            ) : (
+              <div className="text-muted-custom small">
+                {selectedStrategy ? t('backtest.modalEmptyHint') : t('backtest.selectStrategyFirst')}
+              </div>
+            )}
+          </div>
+        ) : null}
+
         {error ? (
           <div className="alert alert-danger border-0 shadow-sm mb-3" role="alert">
             {error}
@@ -417,6 +449,24 @@ export default function KlinePage() {
           )}
         </div>
 
+        <BacktestPanel
+          open={backtestModalOpen}
+          strategy={backtestStrategy}
+          form={form}
+          onClose={() => setBacktestModalOpen(false)}
+          onApplied={(result) => {
+            setBacktestModalOpen(false);
+            if (activeTab) {
+              setBacktestResults((current) => ({ ...current, [activeTab.id]: result }));
+              setBacktestRequestTabId(activeTab.id);
+              setBacktestVisible(true);
+            }
+          }}
+          onClear={() => {
+            setBacktestVisible(false);
+          }}
+        />
+
         <div className="w-100">
           <InlineBacktestPanel
             visible={backtestVisible}
@@ -424,8 +474,6 @@ export default function KlinePage() {
             strategy={backtestStrategy}
             form={form}
             requestTabId={backtestRequestTabId}
-            result={backtestRequestTabId ? backtestResults[backtestRequestTabId] ?? null : null}
-            anchorRef={backtestAnchorRef}
             backtestRunning={backtestBusy}
             onApplied={(tabId, result) => {
               setBacktestResults((current) => ({ ...current, [tabId]: result }));
@@ -435,8 +483,6 @@ export default function KlinePage() {
             }}
           />
         </div>
-
-        {activeTab ? <div className="text-muted-custom small mt-2">{t('backtest.totalTrades', { count: activeTrades.length })}</div> : null}
       </section>
 
       {workbenchOpen ? (

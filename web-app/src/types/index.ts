@@ -74,6 +74,13 @@ export interface BacktestRequest {
   endDate: string;
   strategyId?: string;
   strategySource?: StrategySource;
+  runParameters?: RunParameters;
+}
+
+export interface RunParameters {
+  capital?: number;
+  leverage?: number;
+  feeRate?: number;
 }
 
 export type StrategySourceType = 'BUILTIN' | 'TEMPLATE_VERSION' | 'DRAFT';
@@ -113,6 +120,7 @@ export interface BacktestTradeDetail {
   openReason: string;
   closeReason: string | null;
   closed: boolean;
+  fee?: number | null;
 }
 
 export interface SimpleBacktestResponse {
@@ -135,6 +143,8 @@ export interface BacktestMetrics {
   closedTrades?: number | null;
   averageHoldBars?: number | null;
   averageHoldDays?: number | null;
+  finalEquity?: number | null;
+  totalPnl?: number | null;
   reason?: string | null;
 }
 

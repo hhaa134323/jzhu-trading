@@ -10,6 +10,7 @@ public record BacktestTradeDetailResponse(
         String direction,
         String openReason,
         String closeReason,
-        boolean closed
+        boolean closed,
+        Double fee
 ) {
 }

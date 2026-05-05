@@ -22,8 +22,6 @@ interface StrategyWorkbenchProps {
 const DEFAULT_OWNER = 'demo-user';
 const DEFAULT_MODEL: WorkbenchModel = 'ChatGPT (gpt-5.4)';
 
-const MODEL_OPTIONS: WorkbenchModel[] = ['ChatGPT (gpt-5.4)', 'Claude 3.7 Sonnet', 'DeepSeek-R1'];
-
 function buildCodeText(definition: StrategyDefinition) {
   return JSON.stringify(
     {
@@ -350,9 +348,6 @@ export default function StrategyWorkbench({
               >
                 <span className="strategy-list-title">{draft.name}</span>
                 <span className="strategy-list-subtitle">{draft.description}</span>
-                <span className={`strategy-list-badge ${draft.templateId ? 'saved' : 'draft'}`}>
-                  {draft.templateId ? t('workbench.savedBadge', { version: draft.latestVersion ?? 1 }) : t('workbench.draftBadge')}
-                </span>
               </button>
             );
           })}
@@ -405,7 +400,7 @@ export default function StrategyWorkbench({
         </div>
 
         <div className="row g-3 mb-3">
-          <div className="col-12 col-md-6">
+          <div className="col-12">
             <label className="workbench-label">{t('workbench.strategyName')}</label>
             <input
               className="form-control"
@@ -413,30 +408,6 @@ export default function StrategyWorkbench({
               onChange={(event) => updateSelectedDraft({ name: event.target.value })}
               placeholder={t('workbench.strategyNamePlaceholder')}
             />
-          </div>
-          <div className="col-12 col-md-3">
-            <label className="workbench-label">{t('workbench.ownerId')}</label>
-            <input
-              className="form-control"
-              value={selectedDraft.ownerId}
-              onChange={(event) => updateSelectedDraft({ ownerId: event.target.value })}
-              placeholder={DEFAULT_OWNER}
-            />
-          </div>
-          <div className="col-12 col-md-3">
-            <label className="workbench-label">{t('workbench.model')}</label>
-            <select
-              className="form-select"
-              value={selectedDraft.model}
-              title={t('workbench.model')}
-              onChange={(event) => updateSelectedDraft({ model: event.target.value as WorkbenchModel })}
-            >
-              {MODEL_OPTIONS.map((model) => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
-              ))}
-            </select>
           </div>
           <div className="col-12 col-md-6">
             <label className="workbench-label">{t('workbench.buyStrategy')}</label>
@@ -457,23 +428,6 @@ export default function StrategyWorkbench({
               onChange={(event) => updateSelectedDraft({ sellStrategy: event.target.value })}
               placeholder={t('workbench.sellStrategyPlaceholder')}
             />
-          </div>
-          <div className="col-12 col-md-8">
-            <label className="workbench-label">{t('workbench.changeNote')}</label>
-            <input
-              className="form-control"
-              value={selectedDraft.changeNote}
-              onChange={(event) => updateSelectedDraft({ changeNote: event.target.value })}
-              placeholder="init"
-            />
-          </div>
-          <div className="col-12 col-md-4 d-flex align-items-end">
-            <div className="strategy-meta-block w-100">
-              <div className="text-muted-custom small mb-1">{t('workbench.versionMeta')}</div>
-              <div className="fw-semibold">
-                {selectedDraft.templateId ? `${selectedDraft.templateId} · v${selectedDraft.latestVersion ?? 1}` : t('workbench.unsavedDraft')}
-              </div>
-            </div>
           </div>
         </div>
 

@@ -92,54 +92,86 @@ export default function KlineChart({ symbol, klines, indicators, visibility, maC
       [legendName.rsi]: visibility.rsi,
     };
 
-    const longTrades = backtestTrades.filter((trade) => trade.direction === 'LONG');
+    const PROFIT_COLOR = 'rgba(250, 204, 21, 0.12)';
+    const NON_PROFIT_COLOR = 'rgba(59, 130, 246, 0.14)';
+    const trades = backtestTrades;
     const markPointData: any[] = [];
     const markAreaData: any[] = [];
 
-    for (const trade of longTrades) {
+    // 盈利判定：未平仓 / 打平均算未盈利，盈利需方向匹配
+    const isTradeProfitable = (trade: BacktestTradeDetail): boolean => {
+      if (!trade.closed || !trade.closeDate) return false;
+      if (trade.openPrice <= 0) return false;
+      if (trade.direction === 'LONG') return trade.closePrice > trade.openPrice;
+      if (trade.direction === 'SHORT') return trade.closePrice < trade.openPrice;
+      return false;
+    };
+
+    // 颜色：盈利黄，未盈利蓝
+    const PROFIT_MARK = '#facc15';
+    const PROFIT_BORDER = '#f59e0b';
+    const NON_PROFIT_MARK = '#3b82f6';
+    const NON_PROFIT_BORDER = '#1d4ed8';
+
+    for (const trade of trades) {
+      const profitable = isTradeProfitable(trade);
+      const color = profitable ? PROFIT_MARK : NON_PROFIT_MARK;
+      const border = profitable ? PROFIT_BORDER : NON_PROFIT_BORDER;
+      const labelColor = profitable ? '#fde68a' : '#93c5fd';
+
+      const isLong = trade.direction === 'LONG';
+
+      // 开仓标记：LONG ▴(triangle rotate=0)，SHORT ◆(diamond)
       markPointData.push({
-        name: t('chart.openLong'),
+        name: isLong ? t('chart.openLong') : t('chart.openShort'),
         coord: [trade.openDate, trade.openPrice],
         value: trade.openPrice,
-        symbol: 'triangle',
+        symbol: isLong ? 'triangle' : 'diamond',
         symbolRotate: 0,
         symbolSize: 15,
         symbolOffset: [0, 12],
-        itemStyle: { color: '#facc15', borderColor: '#f59e0b', borderWidth: 1 },
+        itemStyle: { color, borderColor: border, borderWidth: 1 },
         label: {
           show: true,
           position: 'bottom',
-          color: '#fde68a',
-          formatter: `${t('chart.openLong')} ${trade.openPrice.toFixed(2)}`,
+          color: labelColor,
+          formatter: `${isLong ? t('chart.openLong') : t('chart.openShort')} ${trade.openPrice.toFixed(2)}`,
         },
       });
 
+      // 平仓标记（仅 closed）：LONG ▾(triangle rotate=180)，SHORT ◆(diamond)
       if (trade.closed && trade.closeDate) {
         markPointData.push({
-          name: t('chart.closeLong'),
+          name: isLong ? t('chart.closeLong') : t('chart.closeShort'),
           coord: [trade.closeDate, trade.closePrice],
           value: trade.closePrice,
-          symbol: 'triangle',
-          symbolRotate: 180,
+          symbol: isLong ? 'triangle' : 'diamond',
+          symbolRotate: isLong ? 180 : 0,
           symbolSize: 15,
           symbolOffset: [0, -12],
-          itemStyle: { color: '#facc15', borderColor: '#f59e0b', borderWidth: 1 },
+          itemStyle: { color, borderColor: border, borderWidth: 1 },
           label: {
             show: true,
             position: 'top',
-            color: '#fde68a',
-            formatter: `${t('chart.closeLong')} ${trade.closePrice.toFixed(2)}`,
+            color: labelColor,
+            formatter: `${isLong ? t('chart.closeLong') : t('chart.closeShort')} ${trade.closePrice.toFixed(2)}`,
           },
         });
       }
+    }
 
+    // markArea 阴影：未平仓 → 蓝色，盈利 → 黄色，未盈利/打平 → 蓝色
+    for (const trade of trades) {
       const endDate = trade.closed && trade.closeDate ? trade.closeDate : dates[dates.length - 1];
-      if (endDate) {
-        markAreaData.push([
-          { xAxis: trade.openDate },
-          { xAxis: endDate },
-        ]);
+      if (!trade.openDate || !endDate) {
+        continue;
       }
+      const profitable = isTradeProfitable(trade);
+      const color = profitable ? PROFIT_COLOR : NON_PROFIT_COLOR;
+      markAreaData.push([
+        { xAxis: trade.openDate, itemStyle: { color } },
+        { xAxis: endDate },
+      ]);
     }
 
     return {
@@ -318,9 +350,6 @@ export default function KlineChart({ symbol, klines, indicators, visibility, maC
           } : undefined,
           markArea: markAreaData.length > 0 ? {
             silent: true,
-            itemStyle: {
-              color: 'rgba(250, 204, 21, 0.12)',
-            },
             data: markAreaData,
           } : undefined,
           itemStyle: {

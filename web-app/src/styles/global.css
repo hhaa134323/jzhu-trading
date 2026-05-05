@@ -219,27 +219,6 @@ a {
   line-height: 1.4;
 }
 
-.strategy-list-badge {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  border-radius: 999px;
-  padding: 0.18rem 0.55rem;
-  font-size: 0.72rem;
-  background: rgba(37, 99, 235, 0.16);
-  color: #c7d2fe;
-}
-
-.strategy-list-badge.saved {
-  background: rgba(34, 197, 94, 0.12);
-  color: #bbf7d0;
-}
-
-.strategy-list-badge.draft {
-  background: rgba(249, 115, 22, 0.12);
-  color: #fed7aa;
-}
-
 .workbench-label {
   display: inline-block;
   margin-bottom: 0.35rem;
@@ -249,14 +228,6 @@ a {
 
 .workbench-textarea {
   resize: vertical;
-}
-
-.strategy-meta-block {
-  min-height: 100%;
-  border: 1px solid var(--border-color);
-  background: rgba(15, 22, 35, 0.78);
-  border-radius: 12px;
-  padding: 0.85rem 0.9rem;
 }
 
 .code-editor-shell {

@@ -59,6 +59,9 @@ export default function BacktestPanel({ open, strategy, form, onClose, onApplied
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<SimpleBacktestResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [capitalInput, setCapitalInput] = useState('100000');
+  const [leverageInput, setLeverageInput] = useState('1');
+  const [feeRateInput, setFeeRateInput] = useState('0');
 
   const strategyTitle = strategy
     ? strategy.templateId
@@ -83,11 +86,27 @@ export default function BacktestPanel({ open, strategy, form, onClose, onApplied
       return;
     }
 
+    const capital = Number(capitalInput);
+    if (!Number.isFinite(capital) || capital <= 0) {
+      setError(t('backtest.paramInvalidCapital'));
+      return;
+    }
+    const leverage = Number(leverageInput);
+    if (!Number.isFinite(leverage) || leverage < 1) {
+      setError(t('backtest.paramInvalidLeverage'));
+      return;
+    }
+    const feeRate = Number(feeRateInput);
+    if (!Number.isFinite(feeRate) || feeRate < 0) {
+      setError(t('backtest.paramInvalidFeeRate'));
+      return;
+    }
+
     setRunning(true);
     setError(null);
 
     try {
-      const request = buildBacktestRequest(strategy, form);
+      const request = buildBacktestRequest(strategy, form, { capital, leverage, feeRate });
       const data = await runBacktest(request);
       setResult(data);
       onApplied(data);
@@ -143,6 +162,55 @@ export default function BacktestPanel({ open, strategy, form, onClose, onApplied
           </div>
         </div>
 
+        <div className="strategy-meta-block mb-3">
+          <div className="text-muted-custom small mb-2">{t('backtest.runParameters')}</div>
+          <div className="row g-2">
+            <div className="col-12 col-md-4">
+              <label className="form-label small text-muted-custom" htmlFor="backtest-capital">
+                {t('backtest.capital')}
+              </label>
+              <input
+                id="backtest-capital"
+                type="number"
+                min={0}
+                step={1000}
+                className="form-control form-control-sm"
+                value={capitalInput}
+                onChange={(event) => setCapitalInput(event.target.value)}
+              />
+            </div>
+            <div className="col-12 col-md-4">
+              <label className="form-label small text-muted-custom" htmlFor="backtest-leverage">
+                {t('backtest.leverage')}
+              </label>
+              <input
+                id="backtest-leverage"
+                type="number"
+                min={1}
+                step={0.1}
+                className="form-control form-control-sm"
+                value={leverageInput}
+                onChange={(event) => setLeverageInput(event.target.value)}
+              />
+            </div>
+            <div className="col-12 col-md-4">
+              <label className="form-label small text-muted-custom" htmlFor="backtest-fee-rate">
+                {t('backtest.feeRate')}
+              </label>
+              <input
+                id="backtest-fee-rate"
+                type="number"
+                min={0}
+                step={0.0001}
+                className="form-control form-control-sm"
+                value={feeRateInput}
+                onChange={(event) => setFeeRateInput(event.target.value)}
+              />
+            </div>
+          </div>
+          <div className="text-muted-custom small mt-2">{t('backtest.runParametersHint')}</div>
+        </div>
+
         <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
           <button
             type="button"
@@ -174,6 +242,14 @@ export default function BacktestPanel({ open, strategy, form, onClose, onApplied
               <div className="strategy-metric-card">
                 <div className="strategy-metric-label">{t('backtest.metricTotalReturn')}</div>
                 <div className="strategy-metric-value">{metrics.totalReturnPct == null ? (result?.metrics?.reason ? t(`backtest.metricReason.${result.metrics.reason}`) || result.metrics.reason : '--') : formatPercent(metrics.totalReturnPct)}</div>
+              </div>
+              <div className="strategy-metric-card">
+                <div className="strategy-metric-label">{t('backtest.metricFinalEquity')}</div>
+                <div className="strategy-metric-value">{formatNumber(metrics.finalEquity)}</div>
+              </div>
+              <div className="strategy-metric-card">
+                <div className="strategy-metric-label">{t('backtest.metricTotalPnl')}</div>
+                <div className="strategy-metric-value">{formatNumber(metrics.totalPnl)}</div>
               </div>
               <div className="strategy-metric-card">
                 <div className="strategy-metric-label">{t('backtest.metricMaxDrawdown')}</div>

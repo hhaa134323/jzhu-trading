@@ -11,6 +11,8 @@ public record BacktestMetrics(
         Integer closedTrades,
         Double averageHoldBars,
         Double averageHoldDays,
-        String reason
+        String reason,
+        Double finalEquity,
+        Double totalPnl
 ) {
 }

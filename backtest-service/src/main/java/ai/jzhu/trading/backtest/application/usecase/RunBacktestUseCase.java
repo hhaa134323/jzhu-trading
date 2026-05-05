@@ -18,6 +18,7 @@ import ai.jzhu.trading.backtest.application.service.BacktestMetricsCalculator;
 import ai.jzhu.trading.common.dto.backtest.StrategyDefinition;
 import ai.jzhu.trading.common.dto.backtest.StrategyInfoResponse;
 import ai.jzhu.trading.common.dto.backtest.StrategySource;
+import ai.jzhu.trading.common.dto.backtest.RunParameters;
 import ai.jzhu.trading.common.dto.backtest.StrategySourceType;
 import ai.jzhu.trading.common.dto.indicator.IndicatorResponse;
 import org.springframework.stereotype.Service;
@@ -69,13 +70,14 @@ public class RunBacktestUseCase {
         IndicatorData indicators = dataConverter.toIndicatorData(indicatorResponse);
 
         List<BacktestTradeDetail> trades = backtestEngine.run(klines, indicators, strategy);
+        RunParameters runParams = request.runParameters();
         List<BacktestTradeDetailResponse> tradeResponses = trades.stream()
-            .map(this::toTradeDetailResponse)
+            .map(t -> toTradeDetailResponse(t, runParams))
             .toList();
 
         // compute metrics based on klines + trades
         BacktestMetricsCalculator calculator = new BacktestMetricsCalculator();
-        BacktestMetrics metrics = calculator.calculate(klines, trades);
+        BacktestMetrics metrics = calculator.calculate(klines, trades, runParams);
 
         return new SimpleBacktestResponse(
                 symbol,
@@ -157,7 +159,19 @@ public class RunBacktestUseCase {
         throw new IllegalArgumentException("Unsupported strategy source type: " + sourceType);
     }
 
-    private BacktestTradeDetailResponse toTradeDetailResponse(BacktestTradeDetail trade) {
+    private BacktestTradeDetailResponse toTradeDetailResponse(BacktestTradeDetail trade, RunParameters runParams) {
+        Double fee = null;
+        if (runParams != null && trade.closed()) {
+            double capital = runParams.capitalOrDefault();
+            double leverage = runParams.leverageOrDefault();
+            double feeRate = runParams.feeRateOrDefault();
+            if (feeRate > 0) {
+                // approximate fee based on initial capital and leverage (notional = capital * leverage)
+                double notional = capital * leverage;
+                fee = notional * feeRate * 2; // open + close
+                fee = Math.round(fee * 100.0) / 100.0;
+            }
+        }
         return new BacktestTradeDetailResponse(
                 trade.openIndex(),
                 trade.closeIndex(),
@@ -168,7 +182,8 @@ public class RunBacktestUseCase {
                 trade.direction(),
                 trade.openReason(),
                 trade.closeReason(),
-                trade.closed()
+                trade.closed(),
+                fee
         );
     }
 
