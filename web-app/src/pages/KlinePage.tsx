@@ -275,55 +275,69 @@ export default function KlinePage() {
           <div className="d-flex align-items-center gap-2 flex-wrap position-relative">
             <div className="text-muted-custom small">{t('klinePage.totalCount', { count: totalCount })}</div>
 
-            <span className="text-muted-custom small ms-2">{t('klinePage.chartFilter')}</span>
-            {[
-              { key: 'kline', label: t('chart.legend.kline') },
-              { key: 'volume', label: t('chart.legend.volume') },
-              { key: 'ma', label: t('chart.legend.ma') },
-              { key: 'boll', label: t('chart.legend.boll') },
-              { key: 'macd', label: t('chart.legend.macd') },
-              { key: 'rsi', label: t('chart.legend.rsi') },
-            ].map((item) => {
-              const key = item.key as keyof VisibilityState;
-              const enabled = visibility[key];
-              return (
-                <button
-                  key={item.key}
-                  type="button"
+            {/* ── Indicator chip row ── */}
+            <div className="indicator-chip-row">
+              {/* Simple toggles: K线, 成交量, RSI */}
+              {[
+                { key: 'kline', label: t('chart.legend.kline') },
+                { key: 'volume', label: t('chart.legend.volume') },
+                { key: 'rsi', label: t('chart.legend.rsi') },
+              ].map((item) => {
+                const key = item.key as keyof VisibilityState;
+                const enabled = visibility[key];
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className={`indicator-chip${enabled ? ' active' : ''}`}
+                    onClick={() => {
+                      const nextVisibility = { ...visibility, [key]: !enabled };
+                      setVisibility(nextVisibility);
+                      persistPrefs(nextVisibility, config);
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
 
-                  className={`btn btn-sm ${enabled ? 'btn-brand-blue' : 'btn-outline-light'}`}
-                  onClick={() => {
-                    const nextVisibility = { ...visibility, [key]: !enabled };
-                    setVisibility(nextVisibility);
-                    persistPrefs(nextVisibility, config);
-                  }}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-light"
-              onClick={() => setOpenConfig((s) => (s === 'ma' ? null : 'ma'))}
-            >
-              {t('klinePage.maSettings')}
-            </button>
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-light"
-              onClick={() => setOpenConfig((s) => (s === 'macd' ? null : 'macd'))}
-            >
-              {t('klinePage.macdSettings')}
-            </button>
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-light"
-              onClick={() => setOpenConfig((s) => (s === 'boll' ? null : 'boll'))}
-            >
-              {t('klinePage.bollSettings')}
-            </button>
+              {/* Split chips: MA▾, MACD▾, BOLL▾ */}
+              {([
+                { key: 'ma', label: t('chart.legend.ma'), configKey: 'ma' as const },
+                { key: 'macd', label: t('chart.legend.macd'), configKey: 'macd' as const },
+                { key: 'boll', label: t('chart.legend.boll'), configKey: 'boll' as const },
+              ] as const).map(({ key, label, configKey }) => {
+                const vKey = key as keyof VisibilityState;
+                const enabled = visibility[vKey];
+                return (
+                  <span
+                    key={key}
+                    className={`indicator-chip-split${enabled ? ' active' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      className={`indicator-chip-main${enabled ? ' active' : ''}`}
+                      onClick={() => {
+                        const nextVisibility = { ...visibility, [vKey]: !enabled };
+                        setVisibility(nextVisibility);
+                        persistPrefs(nextVisibility, config);
+                      }}
+                    >
+                      {label}
+                    </button>
+                    <span className="indicator-chip-divider" />
+                    <button
+                      type="button"
+                      className="indicator-chip-config"
+                      aria-label={`${label} ${t('klinePage.settings')}`}
+                      onClick={() => setOpenConfig((s) => (s === configKey ? null : configKey))}
+                    >
+                      ▾
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
 
             {openConfig === 'ma' ? (
               <div className="panel-soft p-2 position-absolute end-0 top-100 mt-2 strategy-config-popover">

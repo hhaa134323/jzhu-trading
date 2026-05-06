@@ -3,8 +3,6 @@ package ai.jzhu.trading.indicator.domain.calculator;
 import ai.jzhu.trading.common.dto.indicator.MacdResult;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -43,15 +41,12 @@ public class MacdCalculator {
             }
             double macd = (dif - dea) * 2.0;
 
-            difList.add(round2(dif));
-            deaList.add(round2(dea));
-            macdList.add(round2(macd));
+            // Full precision throughout; round2 only at DTO serialization boundary
+            difList.add(dif);
+            deaList.add(dea);
+            macdList.add(macd);
         }
 
         return new MacdResult(difList, deaList, macdList);
-    }
-
-    private Double round2(double value) {
-        return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).doubleValue();
     }
 }

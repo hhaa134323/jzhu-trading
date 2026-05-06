@@ -56,7 +56,7 @@ export default function KlineChart({ symbol, klines, indicators, visibility, maC
     return `${value}`;
   };
 
-  const option = useMemo<EChartsOption>(() => {
+  const option = useMemo<EChartsOption>((): EChartsOption => {
     const dates = klines.map((item) => item.date);
     const candleData = klines.map((item) => [item.open, item.close, item.low, item.high]);
     const volumes = klines.map((item) => ({
@@ -81,15 +81,6 @@ export default function KlineChart({ symbol, klines, indicators, visibility, maC
       volume: t('chart.legend.volume'),
       macd: t('chart.legend.macd'),
       rsi: t('chart.legend.rsi'),
-    };
-
-    const legendSelected: Record<string, boolean> = {
-      [legendName.kline]: visibility.kline,
-      [legendName.ma]: visibility.ma,
-      [legendName.boll]: visibility.boll,
-      [legendName.volume]: visibility.volume,
-      [legendName.macd]: visibility.macd,
-      [legendName.rsi]: visibility.rsi,
     };
 
     const PROFIT_COLOR = 'rgba(250, 204, 21, 0.12)';
@@ -174,26 +165,40 @@ export default function KlineChart({ symbol, klines, indicators, visibility, maC
       ]);
     }
 
+    // === 动态布局参数 ===
+    const TOP = 12;
+    const BOTTOM_DATAZOOM = 36;
+    const SUB_HEIGHT = 90;
+    const GAP = 12;
+    const TOTAL_HEIGHT = 640;
+
+    const subList = [
+      { key: 'volume' as const, enabled: visibility.volume },
+      { key: 'macd' as const,   enabled: visibility.macd },
+      { key: 'rsi' as const,    enabled: visibility.rsi },
+    ].filter((s) => s.enabled);
+
+    const mainHeight = TOTAL_HEIGHT - TOP - BOTTOM_DATAZOOM
+      - subList.length * (SUB_HEIGHT + GAP);
+
+    const grids = [
+      { left: 56, right: 16, top: TOP, height: mainHeight },
+      ...subList.map((_, i) => ({
+        left: 56,
+        right: 16,
+        top: TOP + mainHeight + GAP + i * (SUB_HEIGHT + GAP),
+        height: SUB_HEIGHT,
+      })),
+    ];
+
+    const gridIndexOf: Partial<Record<'volume' | 'macd' | 'rsi', number>> = {};
+    subList.forEach((s, i) => { gridIndexOf[s.key] = i + 1; });
+
+    const allXAxisIndex = grids.map((_, i) => i);
+
     return {
       backgroundColor: 'transparent',
       animation: true,
-      title: {
-        text: symbol || legendName.kline,
-        left: 12,
-        top: 8,
-        textStyle: {
-          color: '#e6edf3',
-          fontSize: 18,
-          fontWeight: 700,
-        },
-      },
-      legend: {
-        data: [legendName.kline, legendName.ma, legendName.boll, legendName.volume, legendName.macd, legendName.rsi],
-        selected: legendSelected,
-        top: 10,
-        right: 16,
-        textStyle: { color: '#8b949e' },
-      },
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'cross' },
@@ -212,8 +217,6 @@ export default function KlineChart({ symbol, klines, indicators, visibility, maC
             return '';
           }
           const raw = candle.data as number[];
-          // echarts candlestick data 可能包含 dataIndex 前缀（5 元素）或无（4 元素）
-          // 传入顺序: [open, close, low, high]; tooltip 保持同序
           const hasDataIndex = raw.length === 5;
           const offset = hasDataIndex ? 1 : 0;
           const open = raw[offset];
@@ -237,102 +240,58 @@ export default function KlineChart({ symbol, klines, indicators, visibility, maC
             .join('<br/>');
         },
       },
-      grid: [
-        { left: 84, right: 24, top: 64, height: 330, containLabel: false },
-        { left: 84, right: 24, top: 434, height: 86, containLabel: false },
-        { left: 84, right: 24, top: 544, height: 86, containLabel: false },
-        { left: 84, right: 24, top: 654, height: 86, containLabel: false },
-      ],
-      xAxis: [
-        {
-          type: 'category',
-          data: dates,
-          boundaryGap: false,
-          axisLine: { lineStyle: { color: '#30363d' } },
-          axisLabel: {
-            color: '#8b949e',
-            hideOverlap: true,
-            margin: 10,
-            fontSize: 11,
-            formatter: (value: string) => value,
-          },
-          min: 'dataMin',
-          max: 'dataMax',
-        },
-        {
-          type: 'category',
-          gridIndex: 1,
-          data: dates,
-          boundaryGap: false,
-          axisLine: { lineStyle: { color: '#30363d' } },
-          axisLabel: { color: '#8b949e', hideOverlap: true, show: false },
-          min: 'dataMin',
-          max: 'dataMax',
-        },
-        {
-          type: 'category',
-          gridIndex: 2,
-          data: dates,
-          boundaryGap: false,
-          axisLine: { lineStyle: { color: '#30363d' } },
-          axisLabel: { color: '#8b949e', hideOverlap: true, show: false },
-          min: 'dataMin',
-          max: 'dataMax',
-        },
-        {
-          type: 'category',
-          gridIndex: 3,
-          data: dates,
-          boundaryGap: false,
-          axisLine: { lineStyle: { color: '#30363d' } },
-          axisLabel: { color: '#8b949e', hideOverlap: true, show: false },
-          min: 'dataMin',
-          max: 'dataMax',
-        },
-      ],
+      grid: grids,
+      xAxis: grids.map((_, i) => ({
+        type: 'category',
+        gridIndex: i,
+        data: dates,
+        boundaryGap: false,
+        axisLine: { lineStyle: { color: '#30363d' } },
+        axisLabel: i === 0 ? { color: '#8b949e', hideOverlap: true, margin: 10, fontSize: 11 } : { show: false },
+        min: 'dataMin',
+        max: 'dataMax',
+      })),
       yAxis: [
+        // 主图
         {
           scale: true,
-          splitArea: { show: true, areaStyle: { color: ['rgba(255,255,255,0.01)', 'rgba(255,255,255,0.03)'] } },
           axisLine: { lineStyle: { color: '#30363d' } },
-          axisLabel: { color: '#8b949e' },
-          splitLine: { lineStyle: { color: '#21262d' } },
+          axisLabel: { color: '#8b949e', fontSize: 10 },
+          splitLine: { lineStyle: { color: 'rgba(48, 54, 61, 0.4)' } },
         },
-        {
-          scale: true,
-          gridIndex: 1,
-          splitNumber: 2,
-          axisLine: { lineStyle: { color: '#30363d' } },
-          axisLabel: { color: '#8b949e', formatter: (value: number) => formatVolumeAxisLabel(value) },
-          splitLine: { lineStyle: { color: '#21262d' } },
-        },
-        {
-          scale: true,
-          gridIndex: 2,
-          axisLine: { lineStyle: { color: '#30363d' } },
-          axisLabel: { color: '#8b949e' },
-          splitLine: { lineStyle: { color: '#21262d' } },
-        },
-        {
-          scale: true,
-          gridIndex: 3,
-          min: 0,
-          max: 100,
-          axisLine: { lineStyle: { color: '#30363d' } },
-          axisLabel: { color: '#8b949e', margin: 8 },
-          splitLine: { lineStyle: { color: '#21262d' } },
-        },
+        // 副图按 subList 顺序
+        ...subList.map((s) => {
+          if (s.key === 'volume') return {
+            scale: true, gridIndex: gridIndexOf.volume, splitNumber: 2,
+            axisLine: { lineStyle: { color: '#30363d' } },
+            axisLabel: { color: '#8b949e', fontSize: 10, formatter: (v: number) => formatVolumeAxisLabel(v) },
+            splitLine: { lineStyle: { color: 'rgba(48, 54, 61, 0.4)' } },
+          };
+          if (s.key === 'rsi') return {
+            scale: true, gridIndex: gridIndexOf.rsi, min: 0, max: 100,
+            axisLine: { lineStyle: { color: '#30363d' } },
+            axisLabel: { color: '#8b949e', fontSize: 10, margin: 8 },
+            splitLine: { lineStyle: { color: 'rgba(48, 54, 61, 0.4)' } },
+          };
+          // macd
+          return {
+            scale: true, gridIndex: gridIndexOf.macd,
+            axisLine: { lineStyle: { color: '#30363d' } },
+            axisLabel: { color: '#8b949e', fontSize: 10 },
+            splitLine: { lineStyle: { color: 'rgba(48, 54, 61, 0.4)' } },
+          };
+        }),
       ],
       dataZoom: [
         {
           type: 'inside',
-          xAxisIndex: [0, 1, 2, 3],
+          xAxisIndex: allXAxisIndex,
           start: 60,
           end: 100,
         },
         {
           type: 'slider',
-          xAxisIndex: [0, 1, 2, 3],
+          xAxisIndex: allXAxisIndex,
           bottom: 4,
           height: 18,
           start: 60,
@@ -427,7 +386,6 @@ export default function KlineChart({ symbol, klines, indicators, visibility, maC
           showSymbol: false,
           data: visibility.boll && bollConfig.upper ? boll.upperList : boll.upperList.map(() => null),
           lineStyle: { color: '#9ca3af', width: 1.3, type: 'dashed' },
-          areaStyle: bollConfig.band ? { color: 'rgba(156, 163, 175, 0.06)' } : undefined,
         },
         {
           name: legendName.boll,
@@ -449,57 +407,60 @@ export default function KlineChart({ symbol, klines, indicators, visibility, maC
           data: visibility.boll && bollConfig.lower ? boll.lowerList : boll.lowerList.map(() => null),
           lineStyle: { color: '#9ca3af', width: 1.3, type: 'dashed' },
         },
-        {
+        // 副图 series — 只在 visibility 开启时加入
+        ...(gridIndexOf.volume !== undefined ? [{
           name: legendName.volume,
           id: 'volume-bar',
           type: 'bar',
-          xAxisIndex: 1,
-          yAxisIndex: 1,
+          xAxisIndex: gridIndexOf.volume,
+          yAxisIndex: gridIndexOf.volume,
           data: visibility.volume ? volumes : volumes.map(() => ({ value: null })),
           barWidth: '60%',
           itemStyle: { opacity: 0.9 },
-        },
-        {
-          name: legendName.macd,
-          id: 'dif-line',
-          type: 'line',
-          xAxisIndex: 2,
-          yAxisIndex: 2,
-          showSymbol: false,
-          data: visibility.macd && macdConfig.dif ? macd.difList : macd.difList.map(() => null),
-          lineStyle: { color: '#4a90d9', width: 1.4 },
-        },
-        {
-          name: legendName.macd,
-          id: 'dea-line',
-          type: 'line',
-          xAxisIndex: 2,
-          yAxisIndex: 2,
-          showSymbol: false,
-          data: visibility.macd && macdConfig.dea ? macd.deaList : macd.deaList.map(() => null),
-          lineStyle: { color: '#f5c842', width: 1.4 },
-        },
-        {
-          name: legendName.macd,
-          id: 'macd-bar',
-          type: 'bar',
-          xAxisIndex: 2,
-          yAxisIndex: 2,
-          data: visibility.macd && macdConfig.hist ? macdBars : macdBars.map(() => ({ value: null })),
-          barWidth: '55%',
-        },
-        {
+        }] : []),
+        ...(gridIndexOf.macd !== undefined ? [
+          {
+            name: legendName.macd,
+            id: 'dif-line',
+            type: 'line',
+            xAxisIndex: gridIndexOf.macd,
+            yAxisIndex: gridIndexOf.macd,
+            showSymbol: false,
+            data: visibility.macd && macdConfig.dif ? macd.difList : macd.difList.map(() => null),
+            lineStyle: { color: '#4a90d9', width: 1.4 },
+          },
+          {
+            name: legendName.macd,
+            id: 'dea-line',
+            type: 'line',
+            xAxisIndex: gridIndexOf.macd,
+            yAxisIndex: gridIndexOf.macd,
+            showSymbol: false,
+            data: visibility.macd && macdConfig.dea ? macd.deaList : macd.deaList.map(() => null),
+            lineStyle: { color: '#f5c842', width: 1.4 },
+          },
+          {
+            name: legendName.macd,
+            id: 'macd-bar',
+            type: 'bar',
+            xAxisIndex: gridIndexOf.macd,
+            yAxisIndex: gridIndexOf.macd,
+            data: visibility.macd && macdConfig.hist ? macdBars : macdBars.map(() => ({ value: null })),
+            barWidth: '55%',
+          },
+        ] : []),
+        ...(gridIndexOf.rsi !== undefined ? [{
           name: legendName.rsi,
           id: 'rsi6-line',
           type: 'line',
-          xAxisIndex: 3,
-          yAxisIndex: 3,
+          xAxisIndex: gridIndexOf.rsi,
+          yAxisIndex: gridIndexOf.rsi,
           showSymbol: false,
           data: visibility.rsi ? rsi.rsi6List : rsi.rsi6List.map(() => null),
           lineStyle: { color: '#f5c842', width: 1.4 },
-        },
+        }] : []),
       ],
-    };
+    } as EChartsOption;
   }, [backtestTrades, bollConfig, indicators, klines, macdConfig, maConfig, symbol, t, visibility]);
 
   useEffect(() => {

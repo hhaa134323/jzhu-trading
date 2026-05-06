@@ -75,19 +75,20 @@ public class BacktestEngine {
                     double closeReasonIdxPrice;
                     boolean closed;
                     String closeDate;
+                    int realCloseIndex;
                     if (fillIndex >= klines.size()) {
-                        // No next bar — close at current bar's open as last resort,
-                        // but more realistically use the current bar's open (we're at the edge).
-                        // For consistency with "next bar" model, we skip closing at last bar edge.
-                        // Instead, we mark it as open (unclosed) and the metrics will handle it.
-                        // Simplest correct approach: close at last-known open price of the current bar.
-                        fillPrice = klines.get(sig.index()).open();
+                        // No next bar — last bar triggered close signal.
+                        // Use current bar's close as fill price (mark-to-market at bar end).
+                        // closeIndex = sig.index() (NOT fillIndex) to stay within array bounds.
+                        realCloseIndex = sig.index();
+                        fillPrice = klines.get(realCloseIndex).close();
                         fillPrice = applySlippage(fillPrice, sig.direction(), false, slippageBps);
                         closeReasonIdxPrice = fillPrice;
                         closed = true;
-                        closeDate = klines.get(sig.index()).date();
+                        closeDate = klines.get(realCloseIndex).date();
                     } else {
-                        KlineData fillK = klines.get(fillIndex);
+                        realCloseIndex = fillIndex;
+                        KlineData fillK = klines.get(realCloseIndex);
                         fillPrice = applySlippage(fillK.open(), sig.direction(), false, slippageBps);
                         closeReasonIdxPrice = fillPrice;
                         closed = true;
@@ -95,7 +96,7 @@ public class BacktestEngine {
                     }
                     trades.add(new BacktestTradeDetail(
                             position.index(),
-                            fillIndex,
+                            realCloseIndex,
                             klines.get(position.index()).date(),
                             closeDate,
                             position.price(),
@@ -110,10 +111,10 @@ public class BacktestEngine {
             }
         }
 
-        // Handle unclosed position at end: force-close at last bar's open (realistic liquidation price)
+        // Handle unclosed position at end: force-close at last bar's close (mark-to-market liquidation)
         if (position != null) {
             KlineData last = klines.get(klines.size() - 1);
-            double liquidationPrice = applySlippage(last.open(), position.direction(), false, slippageBps);
+            double liquidationPrice = applySlippage(last.close(), position.direction(), false, slippageBps);
             trades.add(new BacktestTradeDetail(
                     position.index(),
                     klines.size() - 1,

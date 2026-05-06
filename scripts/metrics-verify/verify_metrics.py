@@ -41,13 +41,17 @@ def round_or_null(v):
     return round(v, 2)
 
 
-def recompute(klines, trades):
+def recompute(klines, trades, leverage=1.0, commission_bps=0.0, fee_rate=0.0):
+    """
+    对齐 BacktestMetricsCalculator 新版逐 bar mark-to-market 模型。
+    leverage/commission_bps/fee_rate 与 Java 侧 RunParameters 对应。
+    equity[0] = 1.0 (归一化资本)。
+    """
     if isinstance(klines, dict):
         if 'klines' in klines:
             klines = klines['klines']
         elif 'data' in klines:
             klines = klines['data']
-    # klines: list of dict with at least 'close' and 'date'
     n = len(klines)
     if n == 0:
         return None
@@ -55,7 +59,8 @@ def recompute(klines, trades):
     equity = [0.0] * n
     equity[0] = 1.0
 
-    returns_at_index = {}
+    eff_comm = commission_bps / 10000.0 if commission_bps > 0 else fee_rate
+
     gross_profit = 0.0
     gross_loss = 0.0
     total_hold_bars = 0
@@ -63,21 +68,30 @@ def recompute(klines, trades):
 
     closed_trades = [t for t in trades if t.get('closed') and t.get('closeIndex', -1) >= 0]
 
+    # Build open/close index maps
+    trade_by_open = {}
+    trade_by_close = {}
     for t in closed_trades:
+        oi = int(t.get('openIndex'))
+        ci = int(t.get('closeIndex'))
+        trade_by_open[oi] = t
+        trade_by_close[ci] = t
+
+        # gross p&l — trade-level (unchanged semantics)
         open_p = t.get('openPrice')
         close_p = t.get('closePrice')
         if not open_p or open_p <= 0:
             continue
-        sign = -1 if str(t.get('direction','')).upper() == 'SHORT' else 1
-        ret = sign * (close_p / open_p - 1.0)
-        idx = int(t.get('closeIndex'))
-        returns_at_index.setdefault(idx, []).append(ret)
-        if ret > 0:
-            gross_profit += ret
-        if ret < 0:
-            gross_loss += ret
-        oidx = int(t.get('openIndex', 0))
-        total_hold_bars += max(0, idx - oidx)
+        sign = -1 if str(t.get('direction', '')).upper() == 'SHORT' else 1
+        raw_ret = sign * (close_p / open_p - 1.0)
+        leveraged_ret = raw_ret * leverage
+        net_ret = (1.0 + leveraged_ret) * (1.0 - eff_comm) ** 2 - 1.0
+        if net_ret > 0:
+            gross_profit += net_ret
+        if net_ret < 0:
+            gross_loss += net_ret
+
+        total_hold_bars += max(0, ci - oi)
         od = t.get('openDate')
         cd = t.get('closeDate')
         if od and cd:
@@ -85,19 +99,57 @@ def recompute(klines, trades):
                 odt = datetime.fromisoformat(od)
                 cdt = datetime.fromisoformat(cd)
                 days = (cdt.date() - odt.date()).days
-                if days > 0:
-                    total_hold_days += days
+                total_hold_days += max(0, days)  # include 0-day holds
             except Exception:
                 pass
 
-    for i in range(1, n):
-        equity[i] = equity[i-1]
-        lst = returns_at_index.get(i)
-        if lst:
-            mult = 1.0
-            for r in lst:
-                mult *= (1.0 + r)
-            equity[i] = equity[i-1] * mult
+    # State-machine scan: per-bar mark-to-market
+    current_trade = None  # tuple: (openIndex, closeIndex, direction, openPrice, closePrice)
+
+    for i in range(0, n):
+        prev_equity = equity[0] if i == 0 else equity[i - 1]
+        equity[i] = prev_equity  # default flat bar
+
+        # --- open bar ---
+        if i in trade_by_open:
+            t = trade_by_open[i]
+            current_trade = t
+            entry = t.get('openPrice')
+            bar_close = klines[i]['close']
+            sign = -1 if str(t.get('direction', '')).upper() == 'SHORT' else 1
+            bar_return = sign * (bar_close / entry - 1.0) * leverage
+            fee_open = 1.0 - eff_comm
+            equity[i] = prev_equity * (1.0 + bar_return) * fee_open
+
+        # --- mid-holding bar ---
+        elif current_trade is not None and i < int(current_trade.get('closeIndex')):
+            prev_close = klines[i - 1]['close']
+            cur_close = klines[i]['close']
+            sign = -1 if str(current_trade.get('direction', '')).upper() == 'SHORT' else 1
+            bar_return = sign * (cur_close / prev_close - 1.0) * leverage
+            equity[i] = prev_equity * (1.0 + bar_return)
+
+        # --- close bar ---
+        elif current_trade is not None and i == int(current_trade.get('closeIndex')):
+            t = current_trade
+            current_trade = None
+
+            if int(t.get('openIndex')) == i:
+                # same-bar open+close (edge case guard)
+                entry = t.get('openPrice')
+                exit = t.get('closePrice')
+                sign = -1 if str(t.get('direction', '')).upper() == 'SHORT' else 1
+                raw_ret = sign * (exit / entry - 1.0)
+                leveraged_ret = raw_ret * leverage
+                fee_factor = (1.0 - eff_comm) ** 2
+                equity[i] = prev_equity * (1.0 + leveraged_ret) * fee_factor
+            else:
+                prev_close = klines[i - 1]['close']
+                exit_price = t.get('closePrice')
+                sign = -1 if str(t.get('direction', '')).upper() == 'SHORT' else 1
+                bar_return = sign * (exit_price / prev_close - 1.0) * leverage
+                fee_close = 1.0 - eff_comm
+                equity[i] = prev_equity * (1.0 + bar_return) * fee_close
 
     final_equity = equity[-1]
     total_return_pct = (final_equity - 1.0) * 100.0
@@ -135,10 +187,21 @@ def recompute(klines, trades):
         if std > 0:
             sharpe = mean / std * annual_factor
         volatility_pct = std * annual_factor * 100.0
-        days = float(n)
-        if days > 0:
-            annual_return_pct = (final_equity / equity[0]) ** (252.0 / days) - 1.0
-            annual_return_pct = annual_return_pct * 100.0
+        # Wall-clock CAGR: use calendar days / 365.0 instead of bar count * 252
+        if len(klines) >= 2:
+            try:
+                first_date = datetime.fromisoformat(klines[0]['date']).date()
+                last_date = datetime.fromisoformat(klines[-1]['date']).date()
+                calendar_days = (last_date - first_date).days
+                if calendar_days > 0:
+                    years = calendar_days / 365.0
+                    annual_return_pct = (final_equity / equity[0]) ** (1.0 / years) - 1.0
+                    annual_return_pct = annual_return_pct * 100.0
+                else:
+                    # Less than 1 calendar day → total return as fallback
+                    annual_return_pct = total_return_pct
+            except Exception:
+                pass
 
     closed_count = len(closed_trades)
     wins = 0
@@ -277,7 +340,13 @@ def main():
             e = today.isoformat()
         klines = fetch_klines(args.api_base, resp.get('symbol'), args.market, s, e)
 
-    computed = recompute(klines, trades)
+    # Extract run parameters from response (if available) — used for leverage/commission/capital matching
+    run_params = resp.get('runParameters') or {}
+    leverage = float(run_params.get('leverage', 1.0) or 1.0)
+    commission_bps = float(run_params.get('commissionBps', 0.0) or 0.0)
+    fee_rate = float(run_params.get('feeRate', 0.0) or 0.0)
+
+    computed = recompute(klines, trades, leverage=leverage, commission_bps=commission_bps, fee_rate=fee_rate)
 
     thresholds = {'percent': args.percent_threshold, 'sharpe': args.sharpe_threshold}
     compare_table = compare(expected_metrics, computed, thresholds)

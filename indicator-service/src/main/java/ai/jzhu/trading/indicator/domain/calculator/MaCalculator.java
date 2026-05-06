@@ -3,8 +3,6 @@ package ai.jzhu.trading.indicator.domain.calculator;
 import ai.jzhu.trading.common.dto.indicator.MaResult;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,13 +32,10 @@ public class MaCalculator {
             if (i < period - 1) {
                 result.add(null);
             } else {
-                result.add(round2(rollingSum / period));
+                // Full precision throughout; round2 only at DTO serialization boundary
+                result.add(rollingSum / period);
             }
         }
         return result;
-    }
-
-    private Double round2(double value) {
-        return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).doubleValue();
     }
 }

@@ -49,53 +49,100 @@ public class BacktestMetricsCalculator {
         double[] equity = new double[n];
         equity[0] = capital;
 
-        Map<Integer, List<Double>> returnsAtIndex = new HashMap<>();
+        // ---- Per-bar mark-to-market equity accumulation ----
+        // Three-state machine across bars using a "current position" pointer:
+        //   FLAT (no position)       → equity[i] = equity[i-1]   (平推)
+        //   HOLDING_OPEN_BAR (i == openIndex)  → mark using bar close vs entry, deduct open commission
+        //   HOLDING_MID (openIndex < i < closeIndex) → mark using bar close vs prev bar close
+        //   HOLDING_CLOSE_BAR (i == closeIndex) → mark using trade closePrice vs prev bar close, deduct close commission
+        double effectiveCommission = commissionBps > 0 ? commissionBps / 10000.0 : feeRate;
+
         double grossProfit = 0.0;
         double grossLoss = 0.0;
         int totalHoldBars = 0;
         double totalHoldDays = 0.0;
 
+        // Pre-index trades by open/close for O(1) lookup during scan
+        Map<Integer, BacktestTradeDetail> tradeByOpenIndex = new HashMap<>();
+        Map<Integer, BacktestTradeDetail> tradeByCloseIndex = new HashMap<>();
         for (BacktestTradeDetail t : closedTrades) {
+            tradeByOpenIndex.put(t.openIndex(), t);
+            tradeByCloseIndex.put(t.closeIndex(), t);
+
+            // gross profit/loss in percentage terms — still trade-level (unchanged semantics)
             double open = t.openPrice();
             double close = t.closePrice();
             if (open <= 0) continue;
             int sign = "SHORT".equalsIgnoreCase(t.direction()) ? -1 : 1;
             double rawRet = sign * (close / open - 1.0);
-            // leverage amplifies return
             double leveragedRet = rawRet * leverage;
-            // Commission deducted per side — use commissionBps if >0, else legacy feeRate
-            double effectiveCommission = commissionBps > 0 ? commissionBps / 10000.0 : feeRate;
-            double feeFactor = (1.0 - effectiveCommission) * (1.0 - effectiveCommission);
-            double netRet = (1.0 + leveragedRet) * feeFactor - 1.0;
-            returnsAtIndex.computeIfAbsent(t.closeIndex(), k -> new ArrayList<>()).add(netRet);
-
-            // gross profit/loss in percentage terms (for profitFactor consistency)
+            double netRet = (1.0 + leveragedRet) * (1.0 - effectiveCommission) * (1.0 - effectiveCommission) - 1.0;
             if (netRet > 0) grossProfit += netRet;
             if (netRet < 0) grossLoss += netRet;
 
             totalHoldBars += Math.max(0, t.closeIndex() - t.openIndex());
             if (t.openDate() != null && t.closeDate() != null) {
                 try {
-                    LocalDate od = LocalDate.parse(t.openDate());
-                    LocalDate cd = LocalDate.parse(t.closeDate());
-                    long days = ChronoUnit.DAYS.between(od, cd);
-                    if (days > 0) totalHoldDays += days;
+                    LocalDate od = parseDate(t.openDate());
+                    LocalDate cd = parseDate(t.closeDate());
+                    if (od != null && cd != null) {
+                        long days = ChronoUnit.DAYS.between(od, cd);
+                        totalHoldDays += Math.max(0, days); // include 0-day holds
+                    }
                 } catch (DateTimeParseException ex) {
                     // ignore parse errors
                 }
             }
         }
 
-        // accumulate equity curve
-        for (int i = 1; i < n; i++) {
-            equity[i] = equity[i - 1];
-            List<Double> list = returnsAtIndex.get(i);
-            if (list != null && !list.isEmpty()) {
-                double mult = 1.0;
-                for (Double r : list) {
-                    mult *= (1.0 + r);
+        // State-machine scan: track current active trade with a pointer
+        BacktestTradeDetail currentTrade = null;
+
+        for (int i = 0; i < n; i++) {
+            double prevEquity = i == 0 ? equity[0] : equity[i - 1];
+            equity[i] = prevEquity; // default flat bar (no position)
+
+            // --- open bar: i is the openIndex of a trade ---
+            if (tradeByOpenIndex.containsKey(i)) {
+                BacktestTradeDetail t = tradeByOpenIndex.get(i);
+                currentTrade = t;
+                double entry = t.openPrice();            // engine already applied open slippage
+                double barClose = klines.get(i).close();
+                int sign = "SHORT".equalsIgnoreCase(t.direction()) ? -1 : 1;
+                double barReturn = sign * (barClose / entry - 1.0) * leverage;
+                double feeOpen = 1.0 - effectiveCommission;
+                equity[i] = prevEquity * (1.0 + barReturn) * feeOpen;
+            }
+            // --- mid-holding bar: we have an active trade, and this is NOT its close bar ---
+            else if (currentTrade != null && i < currentTrade.closeIndex()) {
+                double prevClose = klines.get(i - 1).close();
+                double curClose = klines.get(i).close();
+                int sign = "SHORT".equalsIgnoreCase(currentTrade.direction()) ? -1 : 1;
+                double barReturn = sign * (curClose / prevClose - 1.0) * leverage;
+                equity[i] = prevEquity * (1.0 + barReturn);
+            }
+            // --- close bar: i == closeIndex of currentTrade ---
+            else if (currentTrade != null && i == currentTrade.closeIndex()) {
+                BacktestTradeDetail t = currentTrade;
+                currentTrade = null; // position closed
+
+                if (t.openIndex() == i) {
+                    // Edge case: same-bar open+close (shouldn't happen with t+1 model, but guard)
+                    double entry = t.openPrice();
+                    double exit = t.closePrice();
+                    int sign = "SHORT".equalsIgnoreCase(t.direction()) ? -1 : 1;
+                    double rawRet = sign * (exit / entry - 1.0);
+                    double leveragedRet = rawRet * leverage;
+                    double feeFactor = (1.0 - effectiveCommission) * (1.0 - effectiveCommission);
+                    equity[i] = prevEquity * (1.0 + leveragedRet) * feeFactor;
+                } else {
+                    double prevClose = klines.get(i - 1).close();
+                    double exitPrice = t.closePrice();   // engine already applied close slippage
+                    int sign = "SHORT".equalsIgnoreCase(t.direction()) ? -1 : 1;
+                    double barReturn = sign * (exitPrice / prevClose - 1.0) * leverage;
+                    double feeClose = 1.0 - effectiveCommission;
+                    equity[i] = prevEquity * (1.0 + barReturn) * feeClose;
                 }
-                equity[i] = equity[i - 1] * mult;
             }
         }
 
@@ -144,9 +191,20 @@ public class BacktestMetricsCalculator {
             }
             volatilityPct = std * annualFactor * 100.0;
 
-            double days = (double) n;
-            if (days > 0) {
-                annualReturnPct = (Math.pow(finalEquity / equity[0], 252.0 / days) - 1.0) * 100.0;
+            // Wall-clock CAGR: use calendar days / 365.0 instead of bar count * 252
+            if (klines.size() >= 2) {
+                LocalDate firstDate = parseDate(klines.get(0).date());
+                LocalDate lastDate = parseDate(klines.get(klines.size() - 1).date());
+                if (firstDate != null && lastDate != null) {
+                    long calendarDays = ChronoUnit.DAYS.between(firstDate, lastDate);
+                    if (calendarDays > 0) {
+                        double years = calendarDays / 365.0;
+                        annualReturnPct = (Math.pow(finalEquity / equity[0], 1.0 / years) - 1.0) * 100.0;
+                    } else {
+                        // Less than 1 calendar day → total return as fallback
+                        annualReturnPct = totalReturnPct;
+                    }
+                }
             }
         }
 
@@ -160,7 +218,6 @@ public class BacktestMetricsCalculator {
             int sign = "SHORT".equalsIgnoreCase(t.direction()) ? -1 : 1;
             double rawRet = sign * (close / open - 1.0);
             double leveragedRet = rawRet * leverage;
-            double effectiveCommission = commissionBps > 0 ? commissionBps / 10000.0 : feeRate;
             double feeFactor = (1.0 - effectiveCommission) * (1.0 - effectiveCommission);
             double netRet = (1.0 + leveragedRet) * feeFactor - 1.0;
             if (netRet > 0) wins++;
@@ -206,5 +263,20 @@ public class BacktestMetricsCalculator {
 
     private static Double roundOrNull(double v) {
         return Math.round(v * 100.0) / 100.0 / 1.0;
+    }
+
+    private static LocalDate parseDate(Object dateObj) {
+        if (dateObj == null) return null;
+        String str = dateObj.toString();
+        try {
+            return LocalDate.parse(str);
+        } catch (DateTimeParseException e) {
+            // Try ISO instant format: "2024-01-15T00:00:00"
+            try {
+                return java.time.LocalDateTime.parse(str).toLocalDate();
+            } catch (Exception e2) {
+                return null;
+            }
+        }
     }
 }

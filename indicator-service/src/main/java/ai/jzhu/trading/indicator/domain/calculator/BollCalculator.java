@@ -3,8 +3,6 @@ package ai.jzhu.trading.indicator.domain.calculator;
 import ai.jzhu.trading.common.dto.indicator.BollResult;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -42,15 +40,12 @@ public class BollCalculator {
             double up = mean + 2.0 * std;
             double down = mean - 2.0 * std;
 
-            middle.add(round2(mean));
-            upper.add(round2(up));
-            lower.add(round2(down));
+            // Full precision throughout; round2 only at DTO serialization boundary
+            middle.add(mean);
+            upper.add(up);
+            lower.add(down);
         }
 
         return new BollResult(upper, middle, lower);
-    }
-
-    private Double round2(double value) {
-        return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).doubleValue();
     }
 }

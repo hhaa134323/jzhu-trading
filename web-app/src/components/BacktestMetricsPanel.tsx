@@ -43,12 +43,23 @@ export default function BacktestMetricsPanel({ metrics, totalTrades, className }
     }
     return String(value);
   };
+  const calmar =
+    metrics?.maxDrawdownPct && metrics.maxDrawdownPct !== 0 && metrics.annualReturnPct != null
+      ? metrics.annualReturnPct / Math.abs(metrics.maxDrawdownPct)
+      : null;
+  const renderCalmar = () => {
+    if (calmar == null || Number.isNaN(calmar)) {
+      return reasonText;
+    }
+    return calmar.toFixed(2);
+  };
   const gridClassName = ['strategy-metric-grid', className].filter(Boolean).join(' ');
 
   return (
     <>
       {metrics ? (
         <div className={gridClassName}>
+          {/* Row 1: 核心收益 */}
           <div className="strategy-metric-card">
             <div className="strategy-metric-label">{t('backtest.metricTotalReturn')}</div>
             <div className="strategy-metric-value">{renderPercent(metrics.totalReturnPct)}</div>
@@ -65,9 +76,14 @@ export default function BacktestMetricsPanel({ metrics, totalTrades, className }
             <div className="strategy-metric-label">{t('backtest.metricMaxDrawdown')}</div>
             <div className="strategy-metric-value">{renderPercent(metrics.maxDrawdownPct)}</div>
           </div>
+          {/* Row 2: 风险调整 */}
           <div className="strategy-metric-card">
             <div className="strategy-metric-label">{t('backtest.metricSharpe')}</div>
             <div className="strategy-metric-value">{renderNumber(metrics.sharpeRatio)}</div>
+          </div>
+          <div className="strategy-metric-card">
+            <div className="strategy-metric-label" title={t('backtest.metricCalmarTooltip')}>{t('backtest.metricCalmar')}</div>
+            <div className="strategy-metric-value">{renderCalmar()}</div>
           </div>
           <div className="strategy-metric-card">
             <div className="strategy-metric-label">{t('backtest.metricAnnualReturn')}</div>
@@ -77,6 +93,7 @@ export default function BacktestMetricsPanel({ metrics, totalTrades, className }
             <div className="strategy-metric-label">{t('backtest.metricVolatility')}</div>
             <div className="strategy-metric-value">{renderPercent(metrics.volatilityPct)}</div>
           </div>
+          {/* Row 3: 交易特征 */}
           <div className="strategy-metric-card">
             <div className="strategy-metric-label">{t('backtest.metricWinRate')}</div>
             <div className="strategy-metric-value">{renderPercent(metrics.winRatePct)}</div>
@@ -90,18 +107,10 @@ export default function BacktestMetricsPanel({ metrics, totalTrades, className }
             <div className="strategy-metric-value">{renderCount(metrics.closedTrades)}</div>
           </div>
           <div className="strategy-metric-card">
-            <div className="strategy-metric-label">{t('backtest.metricAverageHoldBars')}</div>
-            <div className="strategy-metric-value">{renderNumber(metrics.averageHoldBars)}</div>
-          </div>
-          <div className="strategy-metric-card">
             <div className="strategy-metric-label">{t('backtest.metricAverageHoldDays')}</div>
             <div className="strategy-metric-value">{renderNumber(metrics.averageHoldDays)}</div>
           </div>
         </div>
-      ) : null}
-
-      {totalTrades != null ? (
-        <div className="text-muted-custom small">{t('backtest.totalTrades', { count: totalTrades })}</div>
       ) : null}
     </>
   );

@@ -1,6 +1,20 @@
 import { useI18n } from '../i18n';
+import LanguageIcon from './icons/LanguageIcon';
 
-export default function Navbar() {
+export type NavTabKey = 'backtest' | 'history' | 'marketScan';
+
+const NAV_TABS: Array<{ key: NavTabKey; i18nKey: string; disabled?: boolean }> = [
+  { key: 'backtest', i18nKey: 'navbar.backtest' },
+  { key: 'history', i18nKey: 'navbar.history', disabled: true },
+  { key: 'marketScan', i18nKey: 'navbar.marketScan', disabled: true },
+];
+
+interface NavbarProps {
+  activeTab: NavTabKey;
+  onTabChange: (key: NavTabKey) => void;
+}
+
+export default function Navbar({ activeTab, onTabChange }: NavbarProps) {
   const { language, setLanguage, t } = useI18n();
 
   return (
@@ -21,27 +35,32 @@ export default function Navbar() {
           <span className="navbar-toggler-icon" />
         </button>
         <div className="collapse navbar-collapse" id="topNav">
-          <ul className="navbar-nav ms-auto align-items-lg-center gap-lg-2 mt-3 mt-lg-0">
+          <ul className="navbar-nav me-auto align-items-lg-center mt-3 mt-lg-0">
+            {NAV_TABS.map((tab) => (
+              <li key={tab.key} className="nav-item">
+                <button
+                  type="button"
+                  className={`nav-tab ${activeTab === tab.key ? 'active' : ''}`}
+                  disabled={tab.disabled}
+                  data-coming-soon={tab.disabled ? t('navbar.comingSoon') : undefined}
+                  onClick={() => !tab.disabled && onTabChange(tab.key)}
+                >
+                  {t(tab.i18nKey)}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <ul className="navbar-nav align-items-lg-center mt-3 mt-lg-0">
             <li className="nav-item">
-              <button className="nav-link active text-white fw-semibold btn btn-link px-2" type="button">
-                {t('navbar.klineBacktest')}
-              </button>
-            </li>
-            <li className="nav-item d-flex align-items-center gap-1 ms-lg-2">
-              <span className="text-muted-custom small me-1">{t('common.langLabel')}</span>
               <button
                 type="button"
-                className={`btn btn-sm ${language === 'zh-CN' ? 'btn-brand-blue' : 'btn-outline-light'}`}
-                onClick={() => setLanguage('zh-CN')}
+                className="lang-toggle"
+                onClick={() => setLanguage(language === 'zh-CN' ? 'en-US' : 'zh-CN')}
+                aria-label={t('common.langLabel')}
+                title={language === 'zh-CN' ? 'Switch to English' : '切换到中文'}
               >
-                {t('common.zh')}
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm ${language === 'en-US' ? 'btn-brand-blue' : 'btn-outline-light'}`}
-                onClick={() => setLanguage('en-US')}
-              >
-                {t('common.en')}
+                <LanguageIcon size={14} />
+                {language === 'zh-CN' ? '中' : 'EN'}
               </button>
             </li>
           </ul>

@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -104,16 +105,35 @@ public class CalculateIndicatorsUseCase {
             }
         }
 
-        return new IndicatorResponse(macd, ma, rsi, boll);
+        return new IndicatorResponse(
+                new MacdResult(round2List(macd.difList()), round2List(macd.deaList()), round2List(macd.macdList())),
+                new MaResult(round2List(ma.ma5List()), round2List(ma.ma10List()), round2List(ma.ma20List()), round2List(ma.ma30List()), round2List(ma.ma60List())),
+                new RsiResult(round2List(rsi.rsi6List()), round2List(rsi.rsi12List()), round2List(rsi.rsi24List())),
+                new BollResult(round2List(boll.upperList()), round2List(boll.middleList()), round2List(boll.lowerList()))
+        );
     }
 
     private IndicatorResponse toResponse(IndicatorValues values) {
         return new IndicatorResponse(
-                new MacdResult(values.difList(), values.deaList(), values.macdList()),
-                new MaResult(values.ma5List(), values.ma10List(), values.ma20List(), values.ma30List(), values.ma60List()),
-                new RsiResult(values.rsi6List(), values.rsi12List(), values.rsi24List()),
-                new BollResult(values.upperList(), values.middleList(), values.lowerList())
+                new MacdResult(round2List(values.difList()), round2List(values.deaList()), round2List(values.macdList())),
+                new MaResult(round2List(values.ma5List()), round2List(values.ma10List()), round2List(values.ma20List()), round2List(values.ma30List()), round2List(values.ma60List())),
+                new RsiResult(round2List(values.rsi6List()), round2List(values.rsi12List()), round2List(values.rsi24List())),
+                new BollResult(round2List(values.upperList()), round2List(values.middleList()), round2List(values.lowerList()))
         );
+    }
+
+    /** Round2 at the JSON serialization boundary only. DB stores full precision. */
+    private static List<Double> round2List(List<Double> input) {
+        if (input == null) return null;
+        List<Double> out = new ArrayList<>(input.size());
+        for (Double v : input) {
+            if (v == null) {
+                out.add(null);
+            } else {
+                out.add(Math.round(v * 100.0) / 100.0);
+            }
+        }
+        return out;
     }
 
     private void validateRequest(IndicatorRequest request) {
