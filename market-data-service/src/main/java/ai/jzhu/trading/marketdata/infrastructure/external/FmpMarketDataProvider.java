@@ -59,7 +59,7 @@ public class FmpMarketDataProvider implements MarketDataProvider {
         try {
             String responseBody = fmpWebClient.get()
                     .uri(uriBuilder -> uriBuilder
-                            .path("/historical-price-eod/light")
+                            .path("/historical-price-eod/full")
                             .queryParam("symbol", normalizedSymbol)
                             .queryParam("apikey", apiKey)
                             .build())
@@ -73,8 +73,8 @@ public class FmpMarketDataProvider implements MarketDataProvider {
                 return List.of();
             }
 
-            // parse flexibly: some FMP endpoints return objects with open/high/low/close,
-            // others provide a single "price" field. Handle both.
+            // Using /historical-price-eod/full which returns real OHLC (open/high/low/close/volume).
+            // Skip any row missing required OHLC fields — never write flattened data.
             JsonNode root;
             try {
                 root = TENCENT_OBJECT_MAPPER.readTree(responseBody);
@@ -102,20 +102,26 @@ public class FmpMarketDataProvider implements MarketDataProvider {
                 long volume = item.has("volume") ? item.path("volume").asLong() : 0L;
 
                 if (Double.isNaN(open) || Double.isNaN(high) || Double.isNaN(low) || Double.isNaN(close)) {
-                    // fallback: use single price field if available
-                    if (item.has("price")) {
-                        double price = item.path("price").asDouble();
-                        open = high = low = close = price;
-                    } else {
-                        // skip if no usable price data
-                        continue;
-                    }
+                    log.warn("FMP response missing OHLC fields for symbol={}, date={}, open={}, high={}, low={}, close={}. Skipping row.",
+                            normalizedSymbol, dateStr, open, high, low, close);
+                    continue;
                 }
 
                 klines.add(new Kline(date, open, high, low, close, volume));
             }
 
             klines.sort(Comparator.comparing(Kline::date));
+
+            // Sanity check: if >95% of rows have open==close, the FMP endpoint is likely wrong
+            if (!klines.isEmpty()) {
+                long flatCount = klines.stream().filter(k -> k.open() == k.close()).count();
+                double ratio = (double) flatCount / klines.size();
+                if (ratio > 0.95) {
+                    log.warn("Suspicious flat OHLC from FMP, possible wrong endpoint: symbol={}, totalRows={}, flatRows={}, sampleRatio={}",
+                            normalizedSymbol, klines.size(), flatCount, ratio);
+                }
+            }
+
             return klines;
         } catch (WebClientResponseException.Forbidden ex) {
             throw new ExternalApiException("FMP API key is forbidden for this endpoint. Please verify plan permissions or key scope.", ex);

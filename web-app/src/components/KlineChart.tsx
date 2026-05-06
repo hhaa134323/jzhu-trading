@@ -59,15 +59,6 @@ export default function KlineChart({ symbol, klines, indicators, visibility, maC
   const option = useMemo<EChartsOption>(() => {
     const dates = klines.map((item) => item.date);
     const candleData = klines.map((item) => [item.open, item.close, item.low, item.high]);
-    const klinesByDate = new Map(klines.map((item) => [item.date, item] as const));
-
-    // Dev assertion: verify OHLC constraints (tree-shaken in prod build)
-    for (const bar of klines) {
-      if (bar.low > Math.min(bar.open, bar.close) || bar.high < Math.max(bar.open, bar.close)) {
-        console.warn(`[OHLC] Bar ${bar.date} violates OHLC constraint:`, bar);
-      }
-    }
-
     const volumes = klines.map((item) => ({
       value: item.volume,
       itemStyle: {
@@ -220,20 +211,16 @@ export default function KlineChart({ symbol, klines, indicators, visibility, maC
           if (!candle) {
             return '';
           }
-          const axisValue = (candle as { axisValue?: string | number }).axisValue;
-          const dateLabel = String(axisValue ?? candle.name ?? '');
-          const matched = dateLabel ? klinesByDate.get(dateLabel) : undefined;
-          const rawValues = candle.data as number[];
-          let [open, close, low, high] = rawValues;
-
-          if (matched) {
-            open = matched.open;
-            close = matched.close;
-            low = matched.low;
-            high = matched.high;
-          } else if (low > high) {
-            [low, high] = [high, low];
-          }
+          const raw = candle.data as number[];
+          // echarts candlestick data 可能包含 dataIndex 前缀（5 元素）或无（4 元素）
+          // 传入顺序: [open, close, low, high]; tooltip 保持同序
+          const hasDataIndex = raw.length === 5;
+          const offset = hasDataIndex ? 1 : 0;
+          const open = raw[offset];
+          const close = raw[offset + 1];
+          const low = raw[offset + 2];
+          const high = raw[offset + 3];
+          const dateLabel = candle.name ?? '';
           return [
             `<div style="font-weight:700;margin-bottom:6px;">${dateLabel}</div>`,
             `${t('chart.tooltip.open')}: ${open.toFixed(2)}`,
