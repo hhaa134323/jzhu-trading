@@ -102,6 +102,8 @@ export interface StrategyDefinition {
   engineType: string;
   baseStrategyId: string;
   parameters?: StrategyParameters;
+  code?: string;
+  entrypoint?: string;
 }
 
 export interface StrategySource {
@@ -163,6 +165,8 @@ export interface StrategyDraft {
   sellStrategy: string;
   changeNote: string;
   codeText: string;
+  sourceKind?: string;
+  entrypoint?: string;
 }
 
 export interface StrategyInfo {
@@ -215,6 +219,9 @@ export interface SaveStrategyTemplateVersionRequest {
   definition: StrategyDefinition;
   changeNote?: string;
   createdBy?: string;
+  sourceKind?: string;
+  code?: string;
+  entrypoint?: string;
 }
 
 export interface CloneStrategyTemplateRequest {

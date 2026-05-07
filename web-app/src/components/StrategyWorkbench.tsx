@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createStrategyTemplate, saveStrategyTemplateVersion } from '../api';
+import {
+  createStrategyTemplate,
+  fetchStrategyTemplate,
+  fetchStrategyTemplates,
+  saveStrategyTemplateVersion,
+} from '../api';
 import { useI18n } from '../i18n';
 import type {
   CreateStrategyTemplateRequest,
@@ -8,6 +13,7 @@ import type {
   StrategyDefinition,
   StrategyDraft,
   StrategyParameters,
+  StrategyTemplateSummary,
   WorkbenchModel,
 } from '../types';
 
@@ -167,6 +173,8 @@ export default function StrategyWorkbench({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const gutterRef = useRef<HTMLDivElement | null>(null);
+  const [templateList, setTemplateList] = useState<StrategyTemplateSummary[] | null>(null);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   const selectedDraft = useMemo(() => drafts.find((item) => item.localId === selectedId) ?? drafts[0] ?? null, [drafts, selectedId]);
 
@@ -214,8 +222,93 @@ export default function StrategyWorkbench({
     setError(null);
   };
 
+  const handleLoadTemplates = async () => {
+    if (loadingTemplates) {
+      return;
+    }
+    setLoadingTemplates(true);
+    setNotice(null);
+    setError(null);
+    try {
+      const list = await fetchStrategyTemplates();
+      setTemplateList(list);
+      if (list.length === 0) {
+        setNotice(t('workbench.noTemplatesFound'));
+      }
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : t('workbench.loadTemplatesFailed');
+      setError(message);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  const handleSelectTemplate = async (templateSummary: StrategyTemplateSummary) => {
+    setTemplateList(null);
+    setLoadingTemplates(true);
+    setNotice(null);
+    setError(null);
+    try {
+      const detail = await fetchStrategyTemplate(templateSummary.templateId);
+      const latestVersion = detail.versions.length > 0 ? detail.versions[detail.versions.length - 1] : null;
+      const sourceKind = latestVersion?.sourceKind ?? 'JAVA_PARAMS';
+      const localId = `template-${templateSummary.templateId}`;
+      const existingDraft = drafts.find((d) => d.localId === localId);
+      let codeText: string;
+      let entrypoint: string | undefined;
+
+      if (sourceKind === 'PYTHON_CODE' && latestVersion?.definition?.code) {
+        codeText = latestVersion.definition.code;
+        entrypoint = latestVersion.definition.entrypoint ?? 'on_bar';
+      } else if (latestVersion?.definition) {
+        codeText = buildCodeText(latestVersion.definition);
+      } else {
+        codeText = buildCodeText(buildDefinition('maCrossLong', {}));
+      }
+
+      const draft: StrategyDraft = existingDraft ?? {
+        localId,
+        templateId: templateSummary.templateId,
+        latestVersion: templateSummary.latestVersion ?? latestVersion?.versionNo ?? 1,
+        name: templateSummary.name,
+        description: templateSummary.description ?? '',
+        ownerId: templateSummary.ownerId,
+        model: DEFAULT_MODEL,
+        buyStrategy: latestVersion?.changeNote ?? '',
+        sellStrategy: '',
+        changeNote: '',
+        codeText,
+        sourceKind,
+        entrypoint,
+      };
+
+      if (existingDraft) {
+        setDrafts((current) =>
+          current.map((d) =>
+            d.localId === localId
+              ? { ...draft, codeText, sourceKind, entrypoint }
+              : d,
+          ),
+        );
+      } else {
+        setDrafts((current) => [draft, ...current]);
+      }
+      setSelectedId(localId);
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : t('workbench.loadTemplateFailed');
+      setError(message);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
   const handleValidate = async () => {
     if (!selectedDraft) {
+      return;
+    }
+
+    if (selectedDraft.sourceKind === 'PYTHON_CODE') {
+      setNotice(t('workbench.pythonCodeNoValidation'));
       return;
     }
 
@@ -254,12 +347,19 @@ export default function StrategyWorkbench({
     setError(null);
 
     try {
-      const definition = parseCodeText(selectedDraft.codeText);
-      const description = [selectedDraft.buyStrategy.trim(), selectedDraft.sellStrategy.trim()].filter(Boolean).join('\n');
+      const isPython = selectedDraft.sourceKind === 'PYTHON_CODE';
       const ownerId = selectedDraft.ownerId.trim() || DEFAULT_OWNER;
       const changeNote = selectedDraft.changeNote.trim() || 'init';
+      const entrypoint = selectedDraft.entrypoint ?? 'on_bar';
 
       if (!selectedDraft.templateId) {
+        // Create new template — use PYTHON_CODE compatible definition
+        const pythonCode = selectedDraft.codeText;
+        const description = [selectedDraft.buyStrategy.trim(), selectedDraft.sellStrategy.trim()].filter(Boolean).join('\n');
+        const definition: StrategyDefinition = isPython
+          ? { engineType: 'PYTHON', baseStrategyId: selectedDraft.name.trim(), code: pythonCode, entrypoint }
+          : parseCodeText(selectedDraft.codeText);
+
         const request: CreateStrategyTemplateRequest = {
           name: selectedDraft.name.trim(),
           description: description || selectedDraft.description.trim() || undefined,
@@ -279,7 +379,8 @@ export default function StrategyWorkbench({
                   name: detail.name,
                   description: detail.description ?? draft.description,
                   ownerId,
-                  codeText: buildCodeText(definition),
+                  sourceKind: 'PYTHON_CODE',
+                  entrypoint,
                 }
               : draft,
           ),
@@ -288,26 +389,52 @@ export default function StrategyWorkbench({
         return;
       }
 
+      // Save new version on existing template
+      let definition: StrategyDefinition;
+      if (isPython) {
+        definition = {
+          engineType: 'PYTHON',
+          baseStrategyId: selectedDraft.name.trim(),
+          code: selectedDraft.codeText,
+          entrypoint,
+        };
+      } else {
+        definition = parseCodeText(selectedDraft.codeText);
+      }
+
       const request: SaveStrategyTemplateVersionRequest = {
         definition,
         changeNote,
         createdBy: ownerId,
+        sourceKind: isPython ? 'PYTHON_CODE' : undefined,
+        code: isPython ? selectedDraft.codeText : undefined,
+        entrypoint: isPython ? entrypoint : undefined,
       };
-      const detail = await saveStrategyTemplateVersion(selectedDraft.templateId, request);
+      await saveStrategyTemplateVersion(selectedDraft.templateId, request);
+
+      // Reload template to get updated versions
+      const refreshedDetail = await fetchStrategyTemplate(selectedDraft.templateId);
+      const refreshedVersion = refreshedDetail.versions.length > 0
+        ? refreshedDetail.versions[refreshedDetail.versions.length - 1]
+        : null;
 
       setDrafts((current) =>
         current.map((draft) =>
           draft.localId === selectedDraft.localId
             ? {
                 ...draft,
-                latestVersion: detail.latestVersion ?? draft.latestVersion,
+                latestVersion: refreshedDetail.latestVersion ?? draft.latestVersion,
                 ownerId,
-                codeText: buildCodeText(definition),
+                sourceKind: refreshedVersion?.sourceKind ?? draft.sourceKind,
+                entrypoint: refreshedVersion?.definition?.entrypoint ?? draft.entrypoint,
+                codeText: isPython
+                  ? (refreshedVersion?.definition?.code ?? selectedDraft.codeText)
+                  : buildCodeText(refreshedVersion?.definition ?? definition),
               }
             : draft,
         ),
       );
-      setNotice(t('workbench.savedUpdated', { version: detail.latestVersion ?? selectedDraft.latestVersion ?? 1 }));
+      setNotice(t('workbench.savedUpdated', { version: refreshedDetail.latestVersion ?? selectedDraft.latestVersion ?? 1 }));
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : t('workbench.saveFailed');
       setError(message);
@@ -357,6 +484,9 @@ export default function StrategyWorkbench({
           <button type="button" className="btn btn-sm btn-brand-blue" onClick={handleCreateDraft}>
             {t('workbench.newStrategy')}
           </button>
+          <button type="button" className="btn btn-sm btn-outline-light" onClick={handleLoadTemplates} disabled={loadingTemplates}>
+            {loadingTemplates ? t('workbench.loadingTemplates') : t('workbench.loadTemplate')}
+          </button>
           <button
             type="button"
             className="btn btn-sm btn-brand-orange"
@@ -371,6 +501,29 @@ export default function StrategyWorkbench({
             {backtestRunning ? t('backtest.running') : t('workbench.runBacktest')}
           </button>
         </div>
+
+        {templateList ? (
+          <div className="strategy-list-scroll mt-3 border-top pt-3">
+            <div className="small fw-semibold mb-2">{t('workbench.templateListTitle')}</div>
+            {templateList.length === 0 ? (
+              <div className="text-muted-custom small">{t('workbench.noTemplatesFound')}</div>
+            ) : (
+              templateList.map((tmpl) => (
+                <button
+                  key={tmpl.templateId}
+                  type="button"
+                  className="strategy-list-item"
+                  onClick={() => handleSelectTemplate(tmpl)}
+                >
+                  <span className="strategy-list-title">{tmpl.name}</span>
+                  <span className="strategy-list-subtitle">
+                    v{tmpl.latestVersion ?? '?'} &middot; {tmpl.description ?? ''}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        ) : null}
       </section>
 
       <section className="strategy-column strategy-editor-column panel p-3">
@@ -409,6 +562,26 @@ export default function StrategyWorkbench({
               placeholder={t('workbench.strategyNamePlaceholder')}
             />
           </div>
+
+          {selectedDraft.sourceKind === 'PYTHON_CODE' ? (
+            <div className="col-12">
+              <div className="d-flex flex-wrap gap-3 mb-2">
+                <span className="badge bg-primary-subtle text-primary-emphasis px-3 py-2">
+                  sourceKind: {selectedDraft.sourceKind}
+                </span>
+                <div className="d-flex align-items-center gap-2">
+                  <label className="workbench-label mb-0 small">{t('workbench.entrypoint')}</label>
+                  <input
+                    className="form-control form-control-sm"
+                    style={{ width: '180px' }}
+                    value={selectedDraft.entrypoint ?? 'on_bar'}
+                    onChange={(event) => updateSelectedDraft({ entrypoint: event.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="col-12 col-md-6">
             <label className="workbench-label">{t('workbench.buyStrategy')}</label>
             <textarea
@@ -433,7 +606,9 @@ export default function StrategyWorkbench({
 
         <div className="d-flex align-items-center justify-content-between mb-2">
           <label className="workbench-label mb-0">{t('workbench.strategyCode')}</label>
-          <div className="text-muted-custom small">{t('workbench.codeHint')}</div>
+          <div className="text-muted-custom small">
+            {selectedDraft.sourceKind === 'PYTHON_CODE' ? t('workbench.pythonCodeHint') : t('workbench.codeHint')}
+          </div>
         </div>
 
         <div className="code-editor-shell mb-3">

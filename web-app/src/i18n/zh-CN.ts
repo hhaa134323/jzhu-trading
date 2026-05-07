@@ -1,4 +1,4 @@
-const zhCN = {
+﻿const zhCN = {
   common: {
     langLabel: '语言',
     zh: '中文',
@@ -108,7 +108,8 @@ const zhCN = {
     tradeSummary: '交易明细摘要',
     openTrade: '未平仓',
     noTrades: '当前没有可展示的交易明细',
-    modalEmptyHint: '选择一个策略后点击“运行回测”即可查看结果。',
+    modalEmptyHint: '选择一个策略后点击"运行回测"即可查看结果。',
+    strategyContext: '策略上下文',
   },
   workbench: {
     pageLabel: '策略工作台',
@@ -146,6 +147,15 @@ const zhCN = {
     savedCreated: '已创建模板 {templateId}',
     savedUpdated: '已保存新版本 v{version}',
     saveFailed: '保存失败，请稍后重试',
+    loadTemplate: '加载模板',
+    loadingTemplates: '加载中...',
+    templateListTitle: '服务端模板列表',
+    noTemplatesFound: '没有可用模板',
+    loadTemplatesFailed: '加载模板列表失败',
+    loadTemplateFailed: '加载模板详情失败',
+    pythonCodeNoValidation: 'Python 策略无需前端校验，保存即上传',
+    pythonCodeHint: 'Python 代码区，保存时以文本方式上传至服务端',
+    entrypoint: '入口函数',
     docsTitle: '文档说明',
     docsSectionIntroTitle: '策略编写指南',
     docsSectionIntroBody: '每个策略都包含买入方法和卖出方法。当前工作台先保留静态说明，帮助你确认代码区和保存逻辑。',

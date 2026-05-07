@@ -22,6 +22,7 @@ import java.util.UUID;
 public class StrategyTemplateUseCase {
 
     private static final String SOURCE_KIND_JAVA_PARAMS = "JAVA_PARAMS";
+    static final String SOURCE_KIND_PYTHON_CODE = "PYTHON_CODE";
 
     private final StrategyTemplateRepository strategyTemplateRepository;
 
@@ -82,12 +83,29 @@ public class StrategyTemplateUseCase {
         int nextVersion = strategyTemplateRepository.getLatestVersionNo(templateId) + 1;
         String createdBy = normalizeOwner(request.createdBy());
         String changeNote = normalizeOrDefault(request.changeNote(), "version " + nextVersion);
+        String sourceKind = normalizeOrDefault(request.sourceKind(), SOURCE_KIND_JAVA_PARAMS);
+
+        // For PYTHON_CODE, embed code & entrypoint into the definition
+        StrategyDefinition def = request.definition();
+        if (SOURCE_KIND_PYTHON_CODE.equals(sourceKind)) {
+            String pythonCode = request.code();
+            if (pythonCode == null || pythonCode.isBlank()) {
+                throw new IllegalArgumentException("code is required for PYTHON_CODE source kind");
+            }
+            def = new StrategyDefinition(
+                    def.engineType(),
+                    def.baseStrategyId(),
+                    def.parameters(),
+                    pythonCode,
+                    normalizeOrDefault(request.entrypoint(), "on_bar")
+            );
+        }
 
         strategyTemplateRepository.insertVersion(
                 templateId,
                 nextVersion,
-                SOURCE_KIND_JAVA_PARAMS,
-                request.definition(),
+                sourceKind,
+                def,
                 changeNote,
                 createdBy
         );
@@ -121,7 +139,7 @@ public class StrategyTemplateUseCase {
         strategyTemplateRepository.insertVersion(
                 newTemplateId,
                 1,
-                SOURCE_KIND_JAVA_PARAMS,
+                source.sourceKind(),
                 source.definition(),
                 normalizeOrDefault(request.changeNote(), "clone from " + templateId + "#" + sourceVersion),
                 ownerId

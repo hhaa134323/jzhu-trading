@@ -209,6 +209,12 @@ run_maven_service() {
 
   rm -f "${pid_file}"
 
+  # For backtest-service, use custom image with Python3; otherwise use standard maven image
+  local image_name="maven:3.9.9-eclipse-temurin-21"
+  if [[ "${module}" == "backtest-service" ]] && docker_cmd image inspect jzhu-backtest-service:latest >/dev/null 2>&1; then
+    image_name="jzhu-backtest-service:latest"
+  fi
+
   if [[ "${USE_LOCAL_MVN:-0}" == "1" ]]; then
     (
       cd "${ROOT_DIR}"
@@ -231,7 +237,7 @@ run_maven_service() {
         -v "${root_docker_path}:/workspace" \
         -v "${m2_docker_path}:/root/.m2" \
         -w /workspace \
-        maven:3.9.9-eclipse-temurin-21 \
+        "${image_name}" \
         mvn -f "/workspace/${module}/pom.xml" spring-boot:run -DskipTests >"${log_file}" 2>&1 &
       echo $! >"${pid_file}"
     )
@@ -267,6 +273,22 @@ install_shared_modules() {
   fi
 
   echo "[OK] Shared modules installed"
+}
+
+# Build a custom backtest-service Docker image with Python3 runtime included.
+# This image extends maven:3.9.9-eclipse-temurin-21 and adds python3.
+build_backtest_image() {
+  local dockerfile_path="${ROOT_DIR}/backtest-service/Dockerfile"
+  if [[ ! -f "${dockerfile_path}" ]]; then
+    echo "[WARN] Dockerfile not found at ${dockerfile_path}, skipping image build"
+    return
+  fi
+
+  if command -v docker >/dev/null 2>&1; then
+    echo "[INFO] Building backtest-service Docker image with Python3 support..."
+    docker_cmd build -t jzhu-backtest-service:latest -f "${dockerfile_path}" "${ROOT_DIR}" >/dev/null 2>&1
+    echo "[OK] Backtest-service Docker image built"
+  fi
 }
 
 start_web_app() {
@@ -417,6 +439,7 @@ start_all() {
   detect_maven
   cleanup_conflicting_containers
   install_shared_modules
+  build_backtest_image
   start_db
   run_maven_service "market-data-service" "${MARKET_PID_FILE}" "${LOG_DIR}/market-data-service.log"
   wait_for_http_port "market-data-service" "http://localhost:8182/" 120 || true

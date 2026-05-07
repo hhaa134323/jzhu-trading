@@ -1,4 +1,4 @@
-const enUS = {
+﻿const enUS = {
   common: {
     langLabel: 'Language',
     zh: '中文',
@@ -110,6 +110,7 @@ const enUS = {
     openTrade: 'Open',
     noTrades: 'No trade details available yet',
     modalEmptyHint: 'Select a strategy and click Run Backtest to see results.',
+    strategyContext: 'Strategy Context',
   },
   workbench: {
     pageLabel: 'Strategy Workbench',
@@ -147,6 +148,15 @@ const enUS = {
     savedCreated: 'Template created: {templateId}',
     savedUpdated: 'New version saved: v{version}',
     saveFailed: 'Save failed, please retry later',
+    loadTemplate: 'Load Template',
+    loadingTemplates: 'Loading...',
+    templateListTitle: 'Server Templates',
+    noTemplatesFound: 'No templates available',
+    loadTemplatesFailed: 'Failed to load template list',
+    loadTemplateFailed: 'Failed to load template detail',
+    pythonCodeNoValidation: 'Python strategies do not need frontend validation; save to upload',
+    pythonCodeHint: 'Python code area — saved as plain text to the server',
+    entrypoint: 'Entrypoint',
     docsTitle: 'Documentation',
     docsSectionIntroTitle: 'Strategy Writing Guide',
     docsSectionIntroBody: 'Each strategy contains a buy method and a sell method. The workbench keeps static guidance first so the editing and save flow stay visible.',
