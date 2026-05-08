@@ -211,8 +211,15 @@ run_maven_service() {
 
   # For backtest-service, use custom image with Python3; otherwise use standard maven image
   local image_name="maven:3.9.9-eclipse-temurin-21"
-  if [[ "${module}" == "backtest-service" ]] && docker_cmd image inspect jzhu-backtest-service:latest >/dev/null 2>&1; then
-    image_name="jzhu-backtest-service:latest"
+  if [[ "${module}" == "backtest-service" ]]; then
+    if docker_cmd image inspect jzhu-backtest-service:latest >/dev/null 2>&1; then
+      image_name="jzhu-backtest-service:latest"
+      echo "[INFO] backtest-service will use jzhu-backtest-service:latest (python3 available)"
+    else
+      echo "[WARN] jzhu-backtest-service:latest not found! Falling back to ${image_name}."
+      echo "[WARN] Python strategy execution WILL NOT WORK without the custom image."
+      echo "[WARN] Ensure Dockerfile at backtest-service/Dockerfile is present, then run 'manage.sh restart' to rebuild."
+    fi
   fi
 
   if [[ "${USE_LOCAL_MVN:-0}" == "1" ]]; then
@@ -266,7 +273,7 @@ install_shared_modules() {
       -v "${m2_docker_path}:/root/.m2" \
       -w /workspace \
       maven:3.9.9-eclipse-temurin-21 \
-      mvn -f /workspace/pom.xml -pl trading-common -am install -DskipTests >/dev/null
+      mvn -f /workspace/pom.xml -pl trading-common -am install -DskipTests >"${LOG_DIR}/install-shared.log" 2>&1
   else
     echo "[ERROR] Neither mvn nor docker is available. Cannot install shared modules."
     exit 1
@@ -278,16 +285,27 @@ install_shared_modules() {
 # Build a custom backtest-service Docker image with Python3 runtime included.
 # This image extends maven:3.9.9-eclipse-temurin-21 and adds python3.
 build_backtest_image() {
-  local dockerfile_path="${ROOT_DIR}/backtest-service/Dockerfile"
-  if [[ ! -f "${dockerfile_path}" ]]; then
-    echo "[WARN] Dockerfile not found at ${dockerfile_path}, skipping image build"
+  local dockerfile_src="${ROOT_DIR}/backtest-service/Dockerfile"
+  if [[ ! -f "${dockerfile_src}" ]]; then
+    echo "[WARN] Dockerfile not found at ${dockerfile_src}, skipping image build"
     return
   fi
 
   if command -v docker >/dev/null 2>&1; then
     echo "[INFO] Building backtest-service Docker image with Python3 support..."
-    docker_cmd build -t jzhu-backtest-service:latest -f "${dockerfile_path}" "${ROOT_DIR}" >/dev/null 2>&1
-    echo "[OK] Backtest-service Docker image built"
+    local dockerfile_path docker_context
+    dockerfile_path="$(to_docker_host_path "${dockerfile_src}")"
+    docker_context="$(to_docker_host_path "${ROOT_DIR}")"
+    local build_log="${LOG_DIR}/backtest-image-build.log"
+    if docker_cmd build -t jzhu-backtest-service:latest -f "${dockerfile_path}" "${docker_context}" >"${build_log}" 2>&1; then
+      echo "[OK] Backtest-service Docker image built"
+    else
+      echo "[WARN] jzhu-backtest-service:latest build FAILED — Python strategy execution WILL NOT WORK."
+      echo "[WARN] Build error details (last 15 lines of ${build_log}):"
+      tail -15 "${build_log}" | while IFS= read -r line; do echo "       | ${line}"; done
+      echo "[WARN] Falling back to maven:3.9.9-eclipse-temurin-21 (no python3)."
+      echo "[WARN] To retry: check Docker networking/apt sources, then run 'manage.sh restart'."
+    fi
   fi
 }
 
@@ -438,18 +456,34 @@ start_all() {
   load_env_file
   detect_maven
   cleanup_conflicting_containers
+  echo "[STEP] install_shared_modules start"
   install_shared_modules
+  echo "[STEP] install_shared_modules end"
+  echo "[STEP] build_backtest_image start"
   build_backtest_image
+  echo "[STEP] build_backtest_image end"
+  echo "[STEP] start_db start"
   start_db
+  echo "[STEP] start_db end"
+  echo "[STEP] market-data-service start"
   run_maven_service "market-data-service" "${MARKET_PID_FILE}" "${LOG_DIR}/market-data-service.log"
+  echo "[STEP] market-data-service end"
   wait_for_http_port "market-data-service" "http://localhost:8182/" 120 || true
+  echo "[STEP] indicator-service start"
   run_maven_service "indicator-service" "${INDICATOR_PID_FILE}" "${LOG_DIR}/indicator-service.log"
+  echo "[STEP] indicator-service end"
   wait_for_http_port "indicator-service" "http://localhost:8183/" 120 || true
+  echo "[STEP] backtest-service start"
   run_maven_service "backtest-service" "${BACKTEST_PID_FILE}" "${LOG_DIR}/backtest-service.log"
+  echo "[STEP] backtest-service end"
   wait_for_http_port "backtest-service" "http://localhost:8185/" 120 || true
+  echo "[STEP] web-service start"
   run_maven_service "web-service" "${WEB_PID_FILE}" "${LOG_DIR}/web-service.log"
+  echo "[STEP] web-service end"
   wait_for_http_port "web-service" "http://localhost:8181/" 120 || true
+  echo "[STEP] web-app start"
   start_web_app
+  echo "[STEP] web-app end"
   wait_for_http_port "web-app" "http://localhost:3000/" 120 || true
   echo "[DONE] All services are started"
 }

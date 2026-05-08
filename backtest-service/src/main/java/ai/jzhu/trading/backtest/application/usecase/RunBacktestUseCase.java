@@ -228,10 +228,10 @@ public class RunBacktestUseCase {
                 params.put("macd_signal", definition.parameters().macdSignal());
             }
             if (definition.parameters().closeMaFast() != null) {
-                params.put("close_ma_fast", definition.parameters().closeMaFast());
+                params.put("fast", definition.parameters().closeMaFast());
             }
             if (definition.parameters().closeMaSlow() != null) {
-                params.put("close_ma_slow", definition.parameters().closeMaSlow());
+                params.put("slow", definition.parameters().closeMaSlow());
             }
         }
 

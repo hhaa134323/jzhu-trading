@@ -45,6 +45,22 @@ export function parseStrategyDefinition(codeText: string): StrategyDefinition {
 }
 
 export function buildStrategySource(strategy: StrategyDraft): { strategySource: StrategySource; strategyId: string } {
+  // PYTHON_CODE path: codeText is Python source, not JSON — skip JSON.parse entirely
+  if (strategy.sourceKind === 'PYTHON_CODE') {
+    if (!strategy.templateId) {
+      throw new Error('PYTHON_CODE 暂时只支持 TEMPLATE_VERSION 路径');
+    }
+    return {
+      strategyId: strategy.templateId,
+      strategySource: {
+        sourceType: 'TEMPLATE_VERSION',
+        templateId: strategy.templateId,
+        templateVersion: strategy.latestVersion ?? 1,
+      },
+    };
+  }
+
+  // JAVA_PARAMS / default path: codeText is JSON, parse normally
   const definition = parseStrategyDefinition(strategy.codeText);
 
   if (strategy.templateId) {

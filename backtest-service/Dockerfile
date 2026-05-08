@@ -12,7 +12,10 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 
 WORKDIR /workspace
 
-# No ENTRYPOINT â€” manage.sh controls the command line via docker run arguments.
+# No ENTRYPOINT â€?manage.sh controls the command line via docker run arguments.
 # This keeps the image flexible for both service start and test execution.
 # The command format used by manage.sh is:
 #   mvn -f /workspace/backtest-service/pom.xml spring-boot:run -DskipTests
+
+
+

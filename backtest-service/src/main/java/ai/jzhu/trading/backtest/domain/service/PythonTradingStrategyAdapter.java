@@ -1,6 +1,7 @@
 package ai.jzhu.trading.backtest.domain.service;
 
 import ai.jzhu.strategy.domain.indicator.IndicatorData;
+import ai.jzhu.strategy.domain.indicator.MaData;
 import ai.jzhu.strategy.domain.model.Direction;
 import ai.jzhu.strategy.domain.model.KlineData;
 import ai.jzhu.strategy.domain.model.TradeSignal;
@@ -175,9 +176,25 @@ public class PythonTradingStrategyAdapter implements TradingStrategy {
         }
         ctx.put("bar", bar);
 
+        // [PY-DEBUG] Log context before execution
+        KlineData prevK = barIndex > 0 ? klines.get(barIndex - 1) : null;
+        Map<String, Object> prevIndicators = barIndex > 0 ? buildIndicatorMap(barIndex - 1) : Map.of();
+        log.info("[PY-DEBUG] bar={} date={} close={} params={} indicators_keys={} ma_fast={} ma_slow={} ma_fast_prev={} ma_slow_prev={} position_qty={}",
+                barIndex,
+                k.date() != null ? k.date() : "null",
+                k.close(),
+                params,
+                ctx.get("indicators") != null ? ((Map<String, Object>) ctx.get("indicators")).keySet() : "null",
+                ctx.get("indicators") != null ? ((Map<String, Object>) ctx.get("indicators")).get("ma_fast") : "null",
+                ctx.get("indicators") != null ? ((Map<String, Object>) ctx.get("indicators")).get("ma_slow") : "null",
+                prevIndicators.get("ma_fast"),
+                prevIndicators.get("ma_slow"),
+                hasPosition ? 1 : 0
+        );
+
         PythonStrategyExecutionResult result = runner.execute(code, entrypoint, ctx);
-        log.debug("Python strategy bar {}: success={}, action={}, qty={}, error={}",
-                barIndex, result.success(), result.action(), result.qty(), result.errorMessage());
+        log.info("[PY-DEBUG] bar={} action={} success={} qty={} error={}",
+                barIndex, result.action(), result.success(), result.qty(), result.errorMessage());
         barResults[barIndex] = result;
         return result;
     }
@@ -198,6 +215,18 @@ public class PythonTradingStrategyAdapter implements TradingStrategy {
             putIfNotNull(map, "ma_20", indicators.ma().getMa20At(barIndex));
             putIfNotNull(map, "ma_30", indicators.ma().getMa30At(barIndex));
             putIfNotNull(map, "ma_60", indicators.ma().getMa60At(barIndex));
+
+            // Resolve ma_fast / ma_slow from params
+            int fast = paramInt("fast", 5);
+            int slow = paramInt("slow", 20);
+
+            putIfNotNull(map, "ma_fast", getMaByPeriod(indicators.ma(), fast, barIndex));
+            putIfNotNull(map, "ma_slow", getMaByPeriod(indicators.ma(), slow, barIndex));
+
+            if (barIndex > 0) {
+                putIfNotNull(map, "ma_fast_prev", getMaByPeriod(indicators.ma(), fast, barIndex - 1));
+                putIfNotNull(map, "ma_slow_prev", getMaByPeriod(indicators.ma(), slow, barIndex - 1));
+            }
         }
 
         // RSI values
@@ -222,6 +251,36 @@ public class PythonTradingStrategyAdapter implements TradingStrategy {
         }
 
         return map;
+    }
+
+    /** Read param as int with fallback default. */
+    private int paramInt(String key, int fallback) {
+        if (params == null) {
+            return fallback;
+        }
+        Object v = params.get(key);
+        if (v instanceof Number n) {
+            return n.intValue();
+        }
+        if (v instanceof String s) {
+            try {
+                return Integer.parseInt(s);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return fallback;
+    }
+
+    /** Get MA value for an arbitrary period by mapping to the nearest pre-computed list. */
+    private Double getMaByPeriod(MaData ma, int period, int index) {
+        return switch (period) {
+            case 5 -> ma.getMa5At(index);
+            case 10 -> ma.getMa10At(index);
+            case 20 -> ma.getMa20At(index);
+            case 30 -> ma.getMa30At(index);
+            case 60 -> ma.getMa60At(index);
+            default -> null; // unsupported period — only 5/10/20/30/60 are pre-computed
+        };
     }
 
     private static void putIfNotNull(Map<String, Object> map, String key, Object value) {
