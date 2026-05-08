@@ -250,7 +250,7 @@ export default function StrategyWorkbench({
     setError(null);
     try {
       const detail = await fetchStrategyTemplate(templateSummary.templateId);
-      const latestVersion = detail.versions.length > 0 ? detail.versions[detail.versions.length - 1] : null;
+      const latestVersion = detail.versions.length > 0 ? detail.versions[0] : null;
       const sourceKind = latestVersion?.sourceKind ?? 'JAVA_PARAMS';
       const localId = `template-${templateSummary.templateId}`;
       const existingDraft = drafts.find((d) => d.localId === localId);
@@ -410,12 +410,13 @@ export default function StrategyWorkbench({
         code: isPython ? selectedDraft.codeText : undefined,
         entrypoint: isPython ? entrypoint : undefined,
       };
+
       await saveStrategyTemplateVersion(selectedDraft.templateId, request);
 
       // Reload template to get updated versions
       const refreshedDetail = await fetchStrategyTemplate(selectedDraft.templateId);
       const refreshedVersion = refreshedDetail.versions.length > 0
-        ? refreshedDetail.versions[refreshedDetail.versions.length - 1]
+        ? refreshedDetail.versions[0]
         : null;
 
       setDrafts((current) =>

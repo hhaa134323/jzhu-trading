@@ -1,0 +1,14 @@
+{
+  "definition": {
+    "engineType": "PYTHON",
+    "baseStrategyId": "MA Cross (Python)",
+    "parameters": null,
+    "code": "def on_bar(ctx):\n    # params: fast, slow\n    # indicators: ma_fast, ma_slow\n    fast = ctx[\"params\"].get(\"fast\", 10)\n    slow = ctx[\"params\"].get(\"slow\", 20)\n    ma_fast = ctx[\"indicators\"].get(\"ma_fast\")\n    ma_slow = ctx[\"indicators\"].get(\"ma_slow\")\n\n    if ma_fast is None or ma_slow is None:\n        return {\"action\": \"HOLD\"}\n\n    if ma_fast > ma_slow and ctx[\"position\"].get(\"qty\", 0) == 0:\n        return {\"action\": \"BUY\", \"qty\": ctx[\"params\"].get(\"qty\", 100)}\n\n    if ma_fast < ma_slow and ctx[\"position\"].get(\"qty\", 0) > 0:\n        return {\"action\": \"SELL\", \"qty\": ctx[\"position\"][\"qty\"]}\n\n    return {\"action\": \"HOLD\"}\n",
+    "entrypoint": "on_bar"
+  },
+  "changeNote": "test fast10 slow20",
+  "createdBy": "debug-test",
+  "sourceKind": "PYTHON_CODE",
+  "code": "def on_bar(ctx):\n    # params: fast, slow\n    # indicators: ma_fast, ma_slow\n    fast = ctx[\"params\"].get(\"fast\", 10)\n    slow = ctx[\"params\"].get(\"slow\", 20)\n    ma_fast = ctx[\"indicators\"].get(\"ma_fast\")\n    ma_slow = ctx[\"indicators\"].get(\"ma_slow\")\n\n    if ma_fast is None or ma_slow is None:\n        return {\"action\": \"HOLD\"}\n\n    if ma_fast > ma_slow and ctx[\"position\"].get(\"qty\", 0) == 0:\n        return {\"action\": \"BUY\", \"qty\": ctx[\"params\"].get(\"qty\", 100)}\n\n    if ma_fast < ma_slow and ctx[\"position\"].get(\"qty\", 0) > 0:\n        return {\"action\": \"SELL\", \"qty\": ctx[\"position\"][\"qty\"]}\n\n    return {\"action\": \"HOLD\"}\n",
+  "entrypoint": "on_bar"
+}

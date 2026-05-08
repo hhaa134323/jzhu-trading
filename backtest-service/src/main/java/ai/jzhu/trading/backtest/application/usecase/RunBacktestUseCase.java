@@ -235,6 +235,20 @@ public class RunBacktestUseCase {
             }
         }
 
+        // When definition.parameters is null (common for PYTHON_CODE saves from UI),
+        // extract param defaults from Python code so buildIndicatorMap resolves correct MA periods.
+        if (!params.containsKey("fast") || !params.containsKey("slow")) {
+            java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("ctx\\[\"params\"\\]\\.get\\(\"(\\w+)\",\\s*(\\d+)\\s*\\)")
+                .matcher(code);
+            while (m.find()) {
+                String key = m.group(1);
+                if (!params.containsKey(key)) {
+                    params.put(key, Integer.parseInt(m.group(2)));
+                }
+            }
+        }
+
         String strategyId = templateId + "#v" + versionNo;
         String strategyName = "Python#" + templateId + "#v" + versionNo;
 

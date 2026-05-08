@@ -109,6 +109,7 @@ public class StrategyTemplateUseCase {
                 changeNote,
                 createdBy
         );
+
         strategyTemplateRepository.touchTemplate(templateId);
 
         return getTemplateDetail(templateId);
