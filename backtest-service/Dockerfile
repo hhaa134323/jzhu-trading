@@ -10,9 +10,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Create symlink so `python3` is also callable as `python`
 RUN ln -s /usr/bin/python3 /usr/bin/python
 
+# Copy Python daemon script for strategy execution
+COPY backtest-service/src/main/resources/python/strategy_daemon.py /app/strategy_daemon.py
+
 WORKDIR /workspace
 
-# No ENTRYPOINT â€?manage.sh controls the command line via docker run arguments.
+# No ENTRYPOINT ï¿½?manage.sh controls the command line via docker run arguments.
 # This keeps the image flexible for both service start and test execution.
 # The command format used by manage.sh is:
 #   mvn -f /workspace/backtest-service/pom.xml spring-boot:run -DskipTests

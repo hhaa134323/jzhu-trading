@@ -1,0 +1,203 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "Quant" [ref=e6] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e7]:
+        - list [ref=e8]:
+          - listitem [ref=e9]:
+            - button "单标回测" [ref=e10] [cursor=pointer]
+          - listitem [ref=e11]:
+            - button "即将上线 历史记录" [disabled] [ref=e12]
+          - listitem [ref=e13]:
+            - button "即将上线 全市场扫描" [disabled] [ref=e14]
+        - list [ref=e15]:
+          - listitem [ref=e16]:
+            - button "语言" [ref=e17] [cursor=pointer]:
+              - img [ref=e18]
+              - text: 中
+  - main [ref=e22]:
+    - generic [ref=e23]:
+      - generic [ref=e24]:
+        - generic [ref=e26]:
+          - generic [ref=e27]:
+            - generic [ref=e28]: 股票代码
+            - textbox "股票代码" [ref=e29]:
+              - /placeholder: 输入代码
+              - text: TSLA
+          - generic [ref=e30]:
+            - generic [ref=e31]: 市场
+            - combobox "市场" [ref=e32]:
+              - option "美股" [selected]
+              - option "港股"
+              - option "A股"
+          - generic [ref=e33]:
+            - generic [ref=e34]: 周期
+            - combobox "周期" [ref=e35]:
+              - option "日K" [selected]
+              - option "周K"
+              - option "月K"
+          - generic [ref=e36]:
+            - generic [ref=e37]: 开始日期
+            - textbox "开始日期" [ref=e38]: 2024-05-08
+          - generic [ref=e39]:
+            - generic [ref=e40]: 结束日期
+            - textbox "结束日期" [ref=e41]: 2026-05-08
+          - button "查询" [ref=e43] [cursor=pointer]
+        - generic [ref=e69]:
+          - button "TSLA 美股" [ref=e70] [cursor=pointer]
+          - button "删除 TSLA" [ref=e71] [cursor=pointer]: ×
+        - generic [ref=e44]:
+          - generic [ref=e45]:
+            - button "策略编辑" [ref=e46] [cursor=pointer]
+            - button "策略回测" [ref=e72] [cursor=pointer]
+          - generic [ref=e47]:
+            - generic [ref=e48]: 共 502 条数据
+            - generic [ref=e49]:
+              - button "K线" [ref=e50] [cursor=pointer]
+              - button "成交量" [ref=e51] [cursor=pointer]
+              - button "RSI" [ref=e52] [cursor=pointer]
+              - generic [ref=e53]:
+                - button "MA" [ref=e54] [cursor=pointer]
+                - button "MA 配置" [ref=e56] [cursor=pointer]: ▾
+              - generic [ref=e57]:
+                - button "MACD" [ref=e58] [cursor=pointer]
+                - button "MACD 配置" [ref=e60] [cursor=pointer]: ▾
+              - generic [ref=e61]:
+                - button "BOLL" [ref=e62] [cursor=pointer]
+                - button "BOLL 配置" [ref=e64] [cursor=pointer]: ▾
+      - dialog [ref=e354]:
+        - generic [ref=e355]:
+          - generic [ref=e356]:
+            - generic [ref=e357]: 自定义策略工作台
+            - generic [ref=e358]: 点击空白区域或关闭按钮可退出编辑弹窗
+          - button "关闭" [ref=e359] [cursor=pointer]
+        - generic [ref=e360]:
+          - generic [ref=e361]:
+            - generic [ref=e363]:
+              - generic [ref=e364]: 策略列表
+              - generic [ref=e365]: 先选策略，再编辑并回测；回测默认使用当前选中策略
+            - generic [ref=e366]:
+              - button "MA Cross (Python) 双均线交叉策略的 Python 版本（等价 MaCrossLongStrategy）" [ref=e478] [cursor=pointer]:
+                - generic [ref=e479]: MA Cross (Python)
+                - generic [ref=e480]: 双均线交叉策略的 Python 版本（等价 MaCrossLongStrategy）
+              - button "均线交叉-做多 趋势跟随，适合均线多头排列后的入场" [ref=e367] [cursor=pointer]:
+                - generic [ref=e368]: 均线交叉-做多
+                - generic [ref=e369]: 趋势跟随，适合均线多头排列后的入场
+              - button "MACD金叉死叉-做多 MACD 与均线过滤结合的趋势入场" [ref=e370] [cursor=pointer]:
+                - generic [ref=e371]: MACD金叉死叉-做多
+                - generic [ref=e372]: MACD 与均线过滤结合的趋势入场
+              - button "RSI超卖反弹-做多 超卖区反弹确认后入场" [ref=e373] [cursor=pointer]:
+                - generic [ref=e374]: RSI超卖反弹-做多
+                - generic [ref=e375]: 超卖区反弹确认后入场
+              - button "布林带突破-做多 放量突破上轨后顺势入场" [ref=e376] [cursor=pointer]:
+                - generic [ref=e377]: 布林带突破-做多
+                - generic [ref=e378]: 放量突破上轨后顺势入场
+            - generic [ref=e379]:
+              - button "新建策略" [ref=e380] [cursor=pointer]
+              - button "加载模板" [ref=e381] [cursor=pointer]
+              - button "运行回测" [ref=e382] [cursor=pointer]
+          - generic [ref=e383]:
+            - generic [ref=e384]:
+              - generic [ref=e385]:
+                - generic [ref=e386]: 策略编辑区
+                - generic [ref=e387]: 左侧选择策略，中间编辑代码与参数，右侧查看说明
+              - generic [ref=e388]:
+                - button "AI 解析代码" [ref=e389] [cursor=pointer]
+                - button "AI 生成代码" [ref=e390] [cursor=pointer]
+            - generic [ref=e391]:
+              - generic [ref=e392]:
+                - generic [ref=e393]: 策略名称
+                - textbox "输入策略名称" [ref=e394]: MA Cross (Python)
+              - generic [ref=e482]:
+                - generic [ref=e483]: "sourceKind: PYTHON_CODE"
+                - generic [ref=e484]:
+                  - generic [ref=e485]: 入口函数
+                  - textbox [ref=e486]: on_bar
+              - generic [ref=e395]:
+                - generic [ref=e396]: 买入策略
+                - textbox "请输入买入条件说明" [ref=e397]: "v22: strict equivalent of Java MaCrossLongStrategy (golden cross + death cross + close confirmation)"
+              - generic [ref=e398]:
+                - generic [ref=e399]: 卖出策略
+                - textbox "请输入卖出条件说明" [ref=e400]
+            - generic [ref=e401]:
+              - generic [ref=e402]: 策略代码
+              - generic [ref=e403]: Python 代码区，保存时以文本方式上传至服务端
+            - generic [ref=e404]:
+              - generic [ref=e406]:
+                - generic [ref=e407]: "1"
+                - generic [ref=e408]: "2"
+                - generic [ref=e409]: "3"
+                - generic [ref=e410]: "4"
+                - generic [ref=e411]: "5"
+                - generic [ref=e412]: "6"
+                - generic [ref=e413]: "7"
+                - generic [ref=e414]: "8"
+                - generic [ref=e487]: "9"
+                - generic [ref=e488]: "10"
+                - generic [ref=e489]: "11"
+                - generic [ref=e490]: "12"
+                - generic [ref=e491]: "13"
+                - generic [ref=e492]: "14"
+                - generic [ref=e493]: "15"
+                - generic [ref=e494]: "16"
+                - generic [ref=e495]: "17"
+                - generic [ref=e496]: "18"
+                - generic [ref=e497]: "19"
+                - generic [ref=e498]: "20"
+                - generic [ref=e499]: "21"
+                - generic [ref=e500]: "22"
+                - generic [ref=e501]: "23"
+                - generic [ref=e502]: "24"
+                - generic [ref=e503]: "25"
+                - generic [ref=e504]: "26"
+                - generic [ref=e505]: "27"
+                - generic [ref=e506]: "28"
+                - generic [ref=e507]: "29"
+                - generic [ref=e508]: "30"
+                - generic [ref=e509]: "31"
+                - generic [ref=e510]: "32"
+                - generic [ref=e511]: "33"
+                - generic [ref=e512]: "34"
+                - generic [ref=e513]: "35"
+              - textbox "策略代码" [ref=e415]: "def on_bar(ctx): # MA Cross v22 — strict equivalent of Java MaCrossLongStrategy # params: fast, slow (default 10, 20 — same as Java hardcoded) # indicators: ma_fast, ma_slow, ma_fast_prev, ma_slow_prev (injected by PythonTradingStrategyAdapter) fast = ctx[\"params\"].get(\"fast\", 10) slow = ctx[\"params\"].get(\"slow\", 20) ma_fast = ctx[\"indicators\"].get(\"ma_fast\") ma_slow = ctx[\"indicators\"].get(\"ma_slow\") ma_fast_prev = ctx[\"indicators\"].get(\"ma_fast_prev\") ma_slow_prev = ctx[\"indicators\"].get(\"ma_slow_prev\") # warmup: any indicator value missing → HOLD (equivalent to Java currentIndex < DEFAULT_SLOW_PERIOD) if ma_fast is None or ma_slow is None or ma_fast_prev is None or ma_slow_prev is None: return {\"action\": \"HOLD\"} bar_close = ctx[\"bar\"][\"close\"] qty = ctx[\"position\"].get(\"qty\", 0) # --- open signal: golden cross + close above slow (same as Java checkOpenSignal) --- cross_up = ma_fast_prev <= ma_slow_prev and ma_fast > ma_slow close_above_slow = bar_close > ma_slow if cross_up and close_above_slow and qty == 0: return {\"action\": \"BUY\", \"qty\": ctx[\"params\"].get(\"qty\", 100)} # --- close signal: death cross OR close below slow (same as Java checkCloseSignal) --- cross_down = ma_fast_prev >= ma_slow_prev and ma_fast < ma_slow close_below_slow = bar_close < ma_slow if (cross_down or close_below_slow) and qty > 0: return {\"action\": \"SELL\", \"qty\": qty} return {\"action\": \"HOLD\"}"
+            - generic [ref=e416]:
+              - button "验证" [ref=e417] [cursor=pointer]
+              - button "保存" [ref=e418] [cursor=pointer]
+          - generic [ref=e419]:
+            - generic [ref=e420]: 文档说明
+            - generic [ref=e421]:
+              - generic [ref=e422]:
+                - generic [ref=e423]: 策略编写指南
+                - paragraph [ref=e424]: 每个策略都包含买入方法和卖出方法。当前工作台先保留静态说明，帮助你确认代码区和保存逻辑。
+              - generic [ref=e425]:
+                - generic [ref=e426]: 方法参数
+                - table [ref=e427]:
+                  - rowgroup [ref=e428]:
+                    - row "engineType 执行引擎类型，当前仅保留 Java 内置适配器入口。" [ref=e429]:
+                      - cell "engineType" [ref=e430]
+                      - cell "执行引擎类型，当前仅保留 Java 内置适配器入口。" [ref=e431]
+                    - row "baseStrategyId 基础策略标识，验证和保存时会写入模板定义。" [ref=e432]:
+                      - cell "baseStrategyId" [ref=e433]
+                      - cell "基础策略标识，验证和保存时会写入模板定义。" [ref=e434]
+                    - row "parameters 可选数值参数，用于回测执行器读取。" [ref=e435]:
+                      - cell "parameters" [ref=e436]
+                      - cell "可选数值参数，用于回测执行器读取。" [ref=e437]
+                    - row "buyStrategy 买入条件说明，当前先作为编辑字段保留。" [ref=e438]:
+                      - cell "buyStrategy" [ref=e439]
+                      - cell "买入条件说明，当前先作为编辑字段保留。" [ref=e440]
+                    - row "sellStrategy 卖出条件说明，当前先作为编辑字段保留。" [ref=e441]:
+                      - cell "sellStrategy" [ref=e442]
+                      - cell "卖出条件说明，当前先作为编辑字段保留。" [ref=e443]
+              - generic [ref=e444]:
+                - generic [ref=e445]: 工作台规则
+                - list [ref=e446]:
+                  - listitem [ref=e447]: 保存会真实调用模板接口，未保存时仍是本地草稿。
+                  - listitem [ref=e448]: 验证只做前端基础结构校验，不伪造后端执行结果。
+                  - listitem [ref=e449]: 回测模式是独立模式，不会与编辑态共享草稿状态。
+              - generic [ref=e450]:
+                - generic [ref=e451]: AI 占位入口
+                - paragraph [ref=e452]: AI 解析代码与 AI 生成代码先保留为可点击入口，当前不接入真实 AI 能力。
+              - generic [ref=e453]:
+                - generic [ref=e454]: 查询参数
+                - paragraph [ref=e455]: TSLA · 美股 · 日K

@@ -1,0 +1,65 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "Quant" [ref=e6] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e7]:
+        - list [ref=e8]:
+          - listitem [ref=e9]:
+            - button "单标回测" [ref=e10] [cursor=pointer]
+          - listitem [ref=e11]:
+            - button "即将上线 历史记录" [disabled] [ref=e12]
+          - listitem [ref=e13]:
+            - button "即将上线 全市场扫描" [disabled] [ref=e14]
+        - list [ref=e15]:
+          - listitem [ref=e16]:
+            - button "语言" [ref=e17] [cursor=pointer]:
+              - img [ref=e18]
+              - text: 中
+  - main [ref=e22]:
+    - generic [ref=e24]:
+      - generic [ref=e26]:
+        - generic [ref=e27]:
+          - generic [ref=e28]: 股票代码
+          - textbox "股票代码" [ref=e29]:
+            - /placeholder: 输入代码
+            - text: TSLA
+        - generic [ref=e30]:
+          - generic [ref=e31]: 市场
+          - combobox "市场" [ref=e32]:
+            - option "美股" [selected]
+            - option "港股"
+            - option "A股"
+        - generic [ref=e33]:
+          - generic [ref=e34]: 周期
+          - combobox "周期" [ref=e35]:
+            - option "日K" [selected]
+            - option "周K"
+            - option "月K"
+        - generic [ref=e36]:
+          - generic [ref=e37]: 开始日期
+          - textbox "开始日期" [ref=e38]: 2024-05-08
+        - generic [ref=e39]:
+          - generic [ref=e40]: 结束日期
+          - textbox "结束日期" [ref=e41]: 2026-05-08
+        - button "查询" [ref=e43] [cursor=pointer]
+      - generic [ref=e44]:
+        - generic [ref=e45]:
+          - button "策略编辑" [ref=e46] [cursor=pointer]
+          - button "策略回测" [disabled]
+        - generic [ref=e47]:
+          - generic [ref=e48]: 共 0 条数据
+          - generic [ref=e49]:
+            - button "K线" [ref=e50] [cursor=pointer]
+            - button "成交量" [ref=e51] [cursor=pointer]
+            - button "RSI" [ref=e52] [cursor=pointer]
+            - generic [ref=e53]:
+              - button "MA" [ref=e54] [cursor=pointer]
+              - button "MA 配置" [ref=e56] [cursor=pointer]: ▾
+            - generic [ref=e57]:
+              - button "MACD" [ref=e58] [cursor=pointer]
+              - button "MACD 配置" [ref=e60] [cursor=pointer]: ▾
+            - generic [ref=e61]:
+              - button "BOLL" [ref=e62] [cursor=pointer]
+              - button "BOLL 配置" [ref=e64] [cursor=pointer]: ▾
+      - generic [ref=e66]: 请输入股票代码并点击查询

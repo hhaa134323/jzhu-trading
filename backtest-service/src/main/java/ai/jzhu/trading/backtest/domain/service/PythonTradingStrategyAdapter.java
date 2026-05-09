@@ -7,9 +7,6 @@ import ai.jzhu.strategy.domain.model.KlineData;
 import ai.jzhu.strategy.domain.model.TradeSignal;
 import ai.jzhu.strategy.domain.strategy.TradingStrategy;
 import ai.jzhu.trading.backtest.domain.model.PythonStrategyExecutionResult;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,16 +18,17 @@ import java.util.Optional;
  * <p>On construction, it pre-computes one {@code on_bar(ctx)} call per bar index,
  * caching the action (HOLD/BUY/SELL) and quantity. The cache is then used by
  * {@link #checkOpenSignal} and {@link #checkCloseSignal} so that each bar only
- * triggers a single Python subprocess invocation.
+ * triggers a single Python invocation.
  *
- * <p>This avoids re-calling on_bar multiple times for the same bar, which would
- * happen if we called PythonStrategyRunner inside each checkOpenSignal/checkCloseSignal
- * invocation (BacktestEngine calls one OR the other per bar, but not both — however
- * the adapter still pre-computes once to be safe and simple).
+ * <p>Two execution modes are supported:
+ * <ul>
+ *   <li><b>Daemon mode</b> (preferred): uses {@link PythonDaemonRunner}, one long-running
+ *       Python process per backtest. Call {@link #close()} after the backtest.</li>
+ *   <li><b>Legacy mode</b>: uses {@link PythonStrategyRunner}, per-bar subprocess.
+ *       Retained for test compatibility.</li>
+ * </ul>
  */
-public class PythonTradingStrategyAdapter implements TradingStrategy {
-
-    private static final Logger log = LoggerFactory.getLogger(PythonTradingStrategyAdapter.class);
+public class PythonTradingStrategyAdapter implements TradingStrategy, AutoCloseable {
 
     private final String id;
     private final String name;
@@ -40,11 +38,20 @@ public class PythonTradingStrategyAdapter implements TradingStrategy {
     private final IndicatorData indicators;
     private final Map<String, Object> params;
     private final PythonStrategyRunner runner;
+    private final PythonDaemonRunner daemon;
 
     /** Cached on_bar result per bar index. Indexed by bar position. */
     private final PythonStrategyExecutionResult[] barResults;
 
+    // Lazy-computed EMA caches for MACD params (computed once on first access)
+    private Double[] emaFastCache;
+    private Double[] emaSlowCache;
+    private Double[] difCache;
+    private Double[] deaCache;
+
     /**
+     * Legacy constructor — uses per-bar {@link PythonStrategyRunner} subprocess.
+     *
      * @param id         Strategy identifier (e.g. templateId#version).
      * @param name       Human-readable name.
      * @param code       Python source code.
@@ -72,7 +79,46 @@ public class PythonTradingStrategyAdapter implements TradingStrategy {
         this.indicators = indicators;
         this.params = params;
         this.runner = runner;
+        this.daemon = null;
         this.barResults = new PythonStrategyExecutionResult[klines.size()];
+    }
+
+    /**
+     * Daemon constructor — uses a long-running {@link PythonDaemonRunner} process.
+     * The daemon is owned by this adapter; call {@link #close()} to shut it down.
+     *
+     * @param id         Strategy identifier (e.g. templateId#version).
+     * @param name       Human-readable name.
+     * @param klines     Kline data for the backtest period.
+     * @param indicators Indicator data for the backtest period.
+     * @param params     Strategy parameters (from StrategyDefinition).
+     * @param daemon     PythonDaemonRunner instance (already initialized).
+     */
+    public PythonTradingStrategyAdapter(
+            String id,
+            String name,
+            List<KlineData> klines,
+            IndicatorData indicators,
+            Map<String, Object> params,
+            PythonDaemonRunner daemon
+    ) {
+        this.id = id;
+        this.name = name;
+        this.code = null;
+        this.entrypoint = null;
+        this.klines = klines;
+        this.indicators = indicators;
+        this.params = params;
+        this.runner = null;
+        this.daemon = daemon;
+        this.barResults = new PythonStrategyExecutionResult[klines.size()];
+    }
+
+    @Override
+    public void close() {
+        if (daemon != null) {
+            daemon.close();
+        }
     }
 
     @Override
@@ -176,25 +222,12 @@ public class PythonTradingStrategyAdapter implements TradingStrategy {
         }
         ctx.put("bar", bar);
 
-        // [PY-DEBUG] Log context before execution
-        KlineData prevK = barIndex > 0 ? klines.get(barIndex - 1) : null;
-        Map<String, Object> prevIndicators = barIndex > 0 ? buildIndicatorMap(barIndex - 1) : Map.of();
-        log.info("[PY-DEBUG] bar={} date={} close={} params={} indicators_keys={} ma_fast={} ma_slow={} ma_fast_prev={} ma_slow_prev={} position_qty={}",
-                barIndex,
-                k.date() != null ? k.date() : "null",
-                k.close(),
-                params,
-                ctx.get("indicators") != null ? ((Map<String, Object>) ctx.get("indicators")).keySet() : "null",
-                ctx.get("indicators") != null ? ((Map<String, Object>) ctx.get("indicators")).get("ma_fast") : "null",
-                ctx.get("indicators") != null ? ((Map<String, Object>) ctx.get("indicators")).get("ma_slow") : "null",
-                prevIndicators.get("ma_fast"),
-                prevIndicators.get("ma_slow"),
-                hasPosition ? 1 : 0
-        );
-
-        PythonStrategyExecutionResult result = runner.execute(code, entrypoint, ctx);
-        log.info("[PY-DEBUG] bar={} action={} success={} qty={} error={}",
-                barIndex, result.action(), result.success(), result.qty(), result.errorMessage());
+        PythonStrategyExecutionResult result;
+        if (daemon != null) {
+            result = daemon.onBar(ctx);
+        } else {
+            result = runner.execute(code, entrypoint, ctx);
+        }
         barResults[barIndex] = result;
         return result;
     }
@@ -234,23 +267,163 @@ public class PythonTradingStrategyAdapter implements TradingStrategy {
             putIfNotNull(map, "rsi_6", indicators.rsi().getRsi6At(barIndex));
             putIfNotNull(map, "rsi_12", indicators.rsi().getRsi12At(barIndex));
             putIfNotNull(map, "rsi_24", indicators.rsi().getRsi24At(barIndex));
+            if (barIndex > 0) {
+                putIfNotNull(map, "rsi_12_prev", indicators.rsi().getRsi12At(barIndex - 1));
+            }
         }
 
-        // MACD values
-        if (indicators.macd() != null) {
-            putIfNotNull(map, "macd_dif", indicators.macd().getDifAt(barIndex));
-            putIfNotNull(map, "macd_dea", indicators.macd().getDeaAt(barIndex));
-            putIfNotNull(map, "macd_histogram", indicators.macd().getMacdAt(barIndex));
-        }
-
-        // Bollinger values
+        // Bollinger values (+ prev for cross-band detection)
         if (indicators.boll() != null) {
             putIfNotNull(map, "boll_mid", indicators.boll().getMiddleAt(barIndex));
             putIfNotNull(map, "boll_upper", indicators.boll().getUpperAt(barIndex));
             putIfNotNull(map, "boll_lower", indicators.boll().getLowerAt(barIndex));
+            if (barIndex > 0) {
+                putIfNotNull(map, "boll_lower_prev", indicators.boll().getLowerAt(barIndex - 1));
+                putIfNotNull(map, "boll_mid_prev", indicators.boll().getMiddleAt(barIndex - 1));
+                putIfNotNull(map, "boll_upper_prev", indicators.boll().getUpperAt(barIndex - 1));
+            }
+        }
+
+        // EMA-based MACD (computed from klines, parameterized by fast/slow/signal)
+        // Lazy compute once; then read from caches per barIndex.
+        ensureMacdComputed();
+        if (emaFastCache != null && barIndex < emaFastCache.length) {
+            putIfNotNull(map, "ema_fast", emaFastCache[barIndex]);
+            putIfNotNull(map, "ema_slow", emaSlowCache[barIndex]);
+            putIfNotNull(map, "dif", difCache[barIndex]);
+            putIfNotNull(map, "dea", deaCache[barIndex]);
+            if (barIndex > 0) {
+                putIfNotNull(map, "ema_fast_prev", emaFastCache[barIndex - 1]);
+                putIfNotNull(map, "ema_slow_prev", emaSlowCache[barIndex - 1]);
+                putIfNotNull(map, "dif_prev", difCache[barIndex - 1]);
+                putIfNotNull(map, "dea_prev", deaCache[barIndex - 1]);
+            }
+        }
+
+        // Rolling extrema (Donchian-style) — computed from raw klines
+        int lookback = paramInt("breakout_lookback_bars", 20);
+        int exitLookback = paramInt("pullback_ma_period", 10);
+        int hiStart = barIndex - lookback;
+        if (hiStart >= 0) {
+            double maxHigh = Double.NEGATIVE_INFINITY;
+            for (int j = hiStart; j < barIndex; j++) {
+                KlineData kj = klines.get(j);
+                if (kj != null) {
+                    maxHigh = Math.max(maxHigh, kj.high());
+                }
+            }
+            if (maxHigh != Double.NEGATIVE_INFINITY) {
+                map.put("rolling_high", maxHigh);
+            }
+        }
+        int loStart = barIndex - exitLookback;
+        if (loStart >= 0) {
+            double minLow = Double.POSITIVE_INFINITY;
+            for (int j = loStart; j < barIndex; j++) {
+                KlineData kj = klines.get(j);
+                if (kj != null) {
+                    minLow = Math.min(minLow, kj.low());
+                }
+            }
+            if (minLow != Double.POSITIVE_INFINITY) {
+                map.put("rolling_low", minLow);
+            }
+        }
+        if (barIndex > 0) {
+            KlineData prev = klines.get(barIndex - 1);
+            if (prev != null) {
+                map.put("close_prev", prev.close());
+            }
         }
 
         return map;
+    }
+
+    /**
+     * Lazy-compute parameterized EMA arrays for MACD from klines.
+     * Seed: SMA of first N closes at index N-1.
+     * Recurrence: EMA_t = α * close_t + (1-α) * EMA_{t-1}, α = 2/(period+1).
+     */
+    private void ensureMacdComputed() {
+        if (emaFastCache != null) return;
+
+        int fast = paramInt("fast", 12);
+        int slow = paramInt("slow", 26);
+        int signal = paramInt("signal", 9);
+        int n = klines.size();
+
+        if (n == 0) return;
+
+        emaFastCache = new Double[n];
+        emaSlowCache = new Double[n];
+        difCache = new Double[n];
+        deaCache = new Double[n];
+
+        computeEma(klines, fast, emaFastCache);
+        computeEma(klines, slow, emaSlowCache);
+
+        // dif = ema_fast - ema_slow, then EMA(dif, signal) = dea
+        double[] difArr = new double[n];
+        for (int i = 0; i < n; i++) {
+            if (emaFastCache[i] != null && emaSlowCache[i] != null) {
+                difArr[i] = emaFastCache[i] - emaSlowCache[i];
+                difCache[i] = difArr[i];
+            }
+        }
+        // Compute EMA of dif for dea (use double[] for primitive speed)
+        computeEmaOnDouble(difArr, signal, deaCache, n);
+    }
+
+    private static void computeEma(List<KlineData> klines, int period, Double[] out) {
+        int n = klines.size();
+        if (period <= 0 || n == 0) return;
+        double alpha = 2.0 / (period + 1.0);
+        double sum = 0.0;
+        int count = 0;
+        // SMA seed at index period-1
+        for (int i = 0; i < period && i < n; i++) {
+            KlineData k = klines.get(i);
+            if (k != null) {
+                sum += k.close();
+                count++;
+            }
+        }
+        if (count == 0) return;
+        double seed = sum / count;
+        for (int i = 0; i < n; i++) {
+            KlineData k = klines.get(i);
+            if (k == null) continue;
+            if (i < period - 1) {
+                // before seed bar: store NaN-like null (will be omitted by putIfNotNull)
+                continue;
+            } else if (i == period - 1) {
+                out[i] = seed;
+            } else {
+                double prev = out[i - 1] != null ? out[i - 1] : seed;
+                out[i] = alpha * k.close() + (1.0 - alpha) * prev;
+            }
+        }
+    }
+
+    private static void computeEmaOnDouble(double[] values, int period, Double[] out, int n) {
+        if (period <= 0 || n == 0) return;
+        double alpha = 2.0 / (period + 1.0);
+        double sum = 0.0;
+        int count = 0;
+        for (int i = 0; i < period && i < n; i++) {
+            sum += values[i];
+            count++;
+        }
+        if (count == 0) return;
+        double seed = sum / count;
+        for (int i = 0; i < n; i++) {
+            if (i < period - 1) continue;
+            else if (i == period - 1) out[i] = seed;
+            else {
+                double prev = out[i - 1] != null ? out[i - 1] : seed;
+                out[i] = alpha * values[i] + (1.0 - alpha) * prev;
+            }
+        }
     }
 
     /** Read param as int with fallback default. */

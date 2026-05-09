@@ -41,7 +41,6 @@ public class BacktestEngine {
 
         double slippageBps = runParams != null ? runParams.slippageBpsOrDefault() : 0.0;
         double commissionBps = runParams != null ? runParams.commissionBpsOrDefault() : 0.0;
-        // For per-trade commission we store it in the metrics calculator; slippage is applied per fill.
 
         TradeSignal position = null;
 
@@ -54,10 +53,8 @@ public class BacktestEngine {
                 Optional<TradeSignal> openSignal = strategy.checkOpenSignal(klines, indicators, i, false);
                 if (openSignal.isPresent()) {
                     TradeSignal sig = openSignal.get();
-                    // Must have a next bar to fill at
                     int fillIndex = sig.index() + 1;
                     if (fillIndex >= klines.size()) {
-                        // Cannot fill — signal at last bar, no next bar to trade
                         position = null;
                         continue;
                     }
@@ -72,25 +69,19 @@ public class BacktestEngine {
                     TradeSignal sig = closeSignal.get();
                     int fillIndex = sig.index() + 1;
                     double fillPrice;
-                    double closeReasonIdxPrice;
                     boolean closed;
                     String closeDate;
                     int realCloseIndex;
                     if (fillIndex >= klines.size()) {
-                        // No next bar — last bar triggered close signal.
-                        // Use current bar's close as fill price (mark-to-market at bar end).
-                        // closeIndex = sig.index() (NOT fillIndex) to stay within array bounds.
                         realCloseIndex = sig.index();
                         fillPrice = klines.get(realCloseIndex).close();
                         fillPrice = applySlippage(fillPrice, sig.direction(), false, slippageBps);
-                        closeReasonIdxPrice = fillPrice;
                         closed = true;
                         closeDate = klines.get(realCloseIndex).date();
                     } else {
                         realCloseIndex = fillIndex;
                         KlineData fillK = klines.get(realCloseIndex);
                         fillPrice = applySlippage(fillK.open(), sig.direction(), false, slippageBps);
-                        closeReasonIdxPrice = fillPrice;
                         closed = true;
                         closeDate = fillK.date();
                     }
@@ -146,8 +137,6 @@ public class BacktestEngine {
         }
         double factor = slippageBps / 10000.0;
         boolean isLong = direction == ai.jzhu.strategy.domain.model.Direction.LONG;
-        // open long  / close short → buy (price ↑)
-        // close long / open short  → sell (price ↓)
         boolean isBuy = (isLong && isOpen) || (!isLong && !isOpen);
         if (isBuy) {
             return rawPrice * (1.0 + factor);

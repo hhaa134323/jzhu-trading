@@ -89,6 +89,8 @@ function createInitialDrafts(): StrategyDraft[] {
   return [
     {
       localId: 'mean-cross-long',
+      templateId: 'tpl_ma-cross-python',
+      latestVersion: 22,
       name: '均线交叉-做多',
       description: '趋势跟随，适合均线多头排列后的入场',
       ownerId: DEFAULT_OWNER,
@@ -96,15 +98,14 @@ function createInitialDrafts(): StrategyDraft[] {
       buyStrategy: 'MA5 上穿 MA20 且成交量放大时买入',
       sellStrategy: 'MA5 下穿 MA20 或止损触发时卖出',
       changeNote: 'init',
-      codeText: buildCodeText(
-        buildDefinition('maCrossLong', {
-          closeMaFast: 10,
-          closeMaSlow: 20,
-        }),
-      ),
+      sourceKind: 'PYTHON_CODE',
+      entrypoint: 'on_bar',
+      codeText: '',
     },
     {
       localId: 'macd-cross-long',
+      templateId: 'tpl_macd-cross-python',
+      latestVersion: 1,
       name: 'MACD金叉死叉-做多',
       description: 'MACD 与均线过滤结合的趋势入场',
       ownerId: DEFAULT_OWNER,
@@ -112,15 +113,14 @@ function createInitialDrafts(): StrategyDraft[] {
       buyStrategy: 'DIF 上穿 DEA 且价格站上均线时买入',
       sellStrategy: 'DIF 下穿 DEA 或跌破均线时卖出',
       changeNote: 'init',
-      codeText: buildCodeText(
-        buildDefinition('maCrossLong', {
-          closeMaFast: 10,
-          closeMaSlow: 20,
-        }),
-      ),
+      sourceKind: 'PYTHON_CODE',
+      entrypoint: 'on_bar',
+      codeText: '',
     },
     {
       localId: 'rsi-rebound-long',
+      templateId: 'tpl_rsi-rebound-python',
+      latestVersion: 1,
       name: 'RSI超卖反弹-做多',
       description: '超卖区反弹确认后入场',
       ownerId: DEFAULT_OWNER,
@@ -128,16 +128,14 @@ function createInitialDrafts(): StrategyDraft[] {
       buyStrategy: 'RSI 低于 20 且收盘站稳短均线时买入',
       sellStrategy: 'RSI 回升失败或价格跌破短均线时卖出',
       changeNote: 'init',
-      codeText: buildCodeText(
-        buildDefinition('bollReversionLong', {
-          pullbackMaPeriod: 20,
-          closeMaFast: 20,
-          closeMaSlow: 20,
-        }),
-      ),
+      sourceKind: 'PYTHON_CODE',
+      entrypoint: 'on_bar',
+      codeText: '',
     },
     {
       localId: 'boll-breakout-long',
+      templateId: 'tpl_donchian-breakout-python',
+      latestVersion: 1,
       name: '布林带突破-做多',
       description: '放量突破上轨后顺势入场',
       ownerId: DEFAULT_OWNER,
@@ -145,12 +143,9 @@ function createInitialDrafts(): StrategyDraft[] {
       buyStrategy: '放量突破布林带上轨时买入',
       sellStrategy: '回落到中轨下方或止损触发时卖出',
       changeNote: 'init',
-      codeText: buildCodeText(
-        buildDefinition('donchianBreakoutLong', {
-          breakoutLookbackBars: 20,
-          pullbackMaPeriod: 10,
-        }),
-      ),
+      sourceKind: 'PYTHON_CODE',
+      entrypoint: 'on_bar',
+      codeText: '',
     },
   ];
 }

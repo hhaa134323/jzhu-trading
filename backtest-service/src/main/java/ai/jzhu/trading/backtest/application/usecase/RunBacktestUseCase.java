@@ -8,6 +8,7 @@ import ai.jzhu.trading.backtest.domain.model.StrategyTemplateVersion;
 import ai.jzhu.trading.backtest.domain.port.IndicatorPort;
 import ai.jzhu.trading.backtest.domain.port.MarketDataPort;
 import ai.jzhu.trading.backtest.domain.service.BacktestEngine;
+import ai.jzhu.trading.backtest.domain.service.PythonDaemonRunner;
 import ai.jzhu.trading.backtest.domain.service.PythonStrategyRunner;
 import ai.jzhu.trading.backtest.domain.service.PythonTradingStrategyAdapter;
 import ai.jzhu.trading.backtest.infrastructure.converter.DataConverter;
@@ -81,7 +82,18 @@ public class RunBacktestUseCase {
         // Resolve the TradingStrategy — may be a built-in bean or a PYTHON_CODE adapter
         TradingStrategy strategy = resolveTradingStrategy(request, klines, indicators);
 
-        List<BacktestTradeDetail> trades = backtestEngine.run(klines, indicators, strategy, runParams);
+        List<BacktestTradeDetail> trades;
+        try {
+            trades = backtestEngine.run(klines, indicators, strategy, runParams);
+        } finally {
+            if (strategy instanceof AutoCloseable ac) {
+                try {
+                    ac.close();
+                } catch (Exception e) {
+                    log.warn("Failed to close strategy adapter", e);
+                }
+            }
+        }
         List<BacktestTradeDetailResponse> tradeResponses = trades.stream()
             .map(t -> toTradeDetailResponse(t, runParams))
             .toList();
@@ -196,11 +208,13 @@ public class RunBacktestUseCase {
 
     /**
      * Build a {@link PythonTradingStrategyAdapter} from a PYTHON_CODE template version.
+     * Uses a long-running {@link PythonDaemonRunner} for performance.
      */
-    private TradingStrategy buildPythonTradingStrategy(String templateId, int versionNo,
-                                                        StrategyDefinition definition,
-                                                        List<KlineData> klines,
-                                                        IndicatorData indicators) {
+    private PythonTradingStrategyAdapter buildPythonTradingStrategy(
+            String templateId, int versionNo,
+            StrategyDefinition definition,
+            List<KlineData> klines,
+            IndicatorData indicators) {
         String code = definition.code();
         if (code == null || code.isBlank()) {
             throw new IllegalArgumentException("PYTHON_CODE template version missing code");
@@ -252,18 +266,17 @@ public class RunBacktestUseCase {
         String strategyId = templateId + "#v" + versionNo;
         String strategyName = "Python#" + templateId + "#v" + versionNo;
 
-        log.info("Building PythonTradingStrategyAdapter: id={}, entrypoint={}, bars={}",
+        log.info("Building PythonTradingStrategyAdapter (daemon): id={}, entrypoint={}, bars={}",
                 strategyId, entrypoint, klines.size());
 
+        PythonDaemonRunner daemon = new PythonDaemonRunner(code, entrypoint);
         return new PythonTradingStrategyAdapter(
                 strategyId,
                 strategyName,
-                code,
-                entrypoint,
                 klines,
                 indicators,
                 params,
-                pythonStrategyRunner
+                daemon
         );
     }
 

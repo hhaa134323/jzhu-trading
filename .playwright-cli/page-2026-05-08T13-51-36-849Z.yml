@@ -1,0 +1,101 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "Quant" [ref=e6] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e7]:
+        - list [ref=e8]:
+          - listitem [ref=e9]:
+            - button "单标回测" [ref=e10] [cursor=pointer]
+          - listitem [ref=e11]:
+            - button "即将上线 历史记录" [disabled] [ref=e12]
+          - listitem [ref=e13]:
+            - button "即将上线 全市场扫描" [disabled] [ref=e14]
+        - list [ref=e15]:
+          - listitem [ref=e16]:
+            - button "语言" [ref=e17] [cursor=pointer]:
+              - img [ref=e18]
+              - text: 中
+  - main [ref=e22]:
+    - generic [ref=e24]:
+      - generic [ref=e26]:
+        - generic [ref=e27]:
+          - generic [ref=e28]: 股票代码
+          - textbox "股票代码" [ref=e29]:
+            - /placeholder: 输入代码
+            - text: TSLA
+        - generic [ref=e30]:
+          - generic [ref=e31]: 市场
+          - combobox "市场" [ref=e32]:
+            - option "美股" [selected]
+            - option "港股"
+            - option "A股"
+        - generic [ref=e33]:
+          - generic [ref=e34]: 周期
+          - combobox "周期" [ref=e35]:
+            - option "日K" [selected]
+            - option "周K"
+            - option "月K"
+        - generic [ref=e36]:
+          - generic [ref=e37]: 开始日期
+          - textbox "开始日期" [ref=e38]: 2024-05-08
+        - generic [ref=e39]:
+          - generic [ref=e40]: 结束日期
+          - textbox "结束日期" [ref=e41]: 2026-05-08
+        - button "查询" [ref=e43] [cursor=pointer]
+      - generic [ref=e69]:
+        - button "TSLA 美股" [ref=e70] [cursor=pointer]
+        - button "删除 TSLA" [ref=e71] [cursor=pointer]: ×
+      - generic [ref=e44]:
+        - generic [ref=e45]:
+          - button "策略编辑" [ref=e46] [cursor=pointer]
+          - button "策略回测" [ref=e72] [cursor=pointer]
+        - generic [ref=e47]:
+          - generic [ref=e48]: 共 502 条数据
+          - generic [ref=e49]:
+            - button "K线" [ref=e50] [cursor=pointer]
+            - button "成交量" [ref=e51] [cursor=pointer]
+            - button "RSI" [ref=e52] [cursor=pointer]
+            - generic [ref=e53]:
+              - button "MA" [ref=e54] [cursor=pointer]
+              - button "MA 配置" [ref=e56] [cursor=pointer]: ▾
+            - generic [ref=e57]:
+              - button "MACD" [ref=e58] [cursor=pointer]
+              - button "MACD 配置" [ref=e60] [cursor=pointer]: ▾
+            - generic [ref=e61]:
+              - button "BOLL" [ref=e62] [cursor=pointer]
+              - button "BOLL 配置" [ref=e64] [cursor=pointer]: ▾
+      - dialog "策略回测" [ref=e516]:
+        - generic [ref=e517]:
+          - generic [ref=e518]:
+            - heading "策略回测" [level=3] [ref=e519]
+            - generic [ref=e520]: 弹窗会直接使用当前选中的策略，不再重复选择策略。
+          - button "关闭" [ref=e521] [cursor=pointer]
+        - generic [ref=e522]:
+          - generic [ref=e524]:
+            - generic [ref=e525]: 当前策略
+            - generic [ref=e526]: MA Cross (Python) · tpl_ma-cross-python · v22
+          - generic [ref=e528]:
+            - generic [ref=e529]: 查询参数
+            - generic [ref=e530]: TSLA · 美股 · 日K
+            - generic [ref=e531]: 2024-05-08 ~ 2026-05-08
+        - generic [ref=e532]:
+          - generic [ref=e533]: 运行参数
+          - generic [ref=e534]:
+            - generic [ref=e535]:
+              - generic [ref=e536]: 本金
+              - spinbutton "本金" [ref=e537]: "100000"
+            - generic [ref=e538]:
+              - generic [ref=e539]: 杠杆
+              - spinbutton "杠杆" [ref=e540]: "1"
+            - generic [ref=e541]:
+              - generic [ref=e542]: 手续费(bps)
+              - spinbutton "手续费(bps)" [ref=e543]: "1"
+            - generic [ref=e544]:
+              - generic [ref=e545]: 滑点(bps)
+              - spinbutton "滑点(bps)" [ref=e546]: "5"
+          - generic [ref=e547]: 滑点与手续费按 bps 计费（1 bps = 0.01%）；杠杆需 ≥ 1。
+        - generic [ref=e548]:
+          - button "运行回测" [ref=e549] [cursor=pointer]
+          - button "清除" [ref=e550] [cursor=pointer]
+        - generic [ref=e551]: 选择一个策略后点击"运行回测"即可查看结果。

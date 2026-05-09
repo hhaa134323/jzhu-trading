@@ -23,7 +23,7 @@ export async function fetchStrategies() {
 
 export async function runBacktest(request: BacktestRequest) {
   try {
-    const response = await api.post<SimpleBacktestResponse>('/backtest/run', request);
+    const response = await api.post<SimpleBacktestResponse>('/backtest/run', request, { timeout: 180000 });
     return response.data;
   } catch (err: any) {
     if (err?.response?.data && typeof err.response.data === 'object' && err.response.data.message) {

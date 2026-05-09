@@ -4,17 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repo overview
 
-This repo is a multi-module quant trading platform:
+This repo is a multi-module quant trading platform. **Docker Desktop is required** — all services and the frontend run exclusively through Docker containers.
 
-- **Backend**: Java 21 + Spring Boot 4, built as a Maven multi-module reactor ([pom.xml](pom.xml)).
-- **Frontend**: React + Vite in [web-app/](web-app/).
-- **Local runtime**: TimescaleDB (Postgres) via Docker; services run either via local `mvn`/`npm` or Docker wrappers.
+- **Backend**: Java 21 + Spring Boot 4.0, built as a Maven multi-module reactor ([pom.xml](pom.xml)).
+- **Frontend**: React 19 + Vite 7 + TypeScript in [web-app/](web-app/).
+- **Local runtime**: TimescaleDB (PostgreSQL 16) via Docker.
 
 ## Common commands
 
-### One-click start/stop (recommended)
+### Start/stop (the only supported way)
 
-From repo root [jzhu-trading/](.):
+All commands from repo root. Everything runs inside Docker containers managed by these scripts.
 
 - Windows:
   - `scripts\manage.cmd start`
@@ -27,116 +27,116 @@ From repo root [jzhu-trading/](.):
   - `chmod +x scripts/manage.sh`
   - `./scripts/manage.sh start`
   - `./scripts/manage.sh stop`
+  - `./scripts/manage.sh restart`
+  - `./scripts/manage.sh status`
+  - `./scripts/manage.sh logs`
 
-This starts/stops: TimescaleDB, market-data-service, indicator-service, backtest-service, web-service, web-app.
+`start` brings up containers in order: TimescaleDB → market-data-service → indicator-service → backtest-service → web-service → web-app. The script auto-detects whether to use local `mvn` or Docker-based Maven for backend services. Set `FORCE_DOCKER_MAVEN=1` to force Docker mode.
 
-### Backend (Maven / Spring Boot)
+Environment variables are loaded from [.env](.env) at startup (`FMP_API_KEY`, `SPRING_PROFILES_ACTIVE`, DB credentials).
 
-Run these from [jzhu-trading/](.) unless noted.
+### Backend (Maven build/test)
+
+No Maven Wrapper is checked in. Backend build and test commands MUST run through Docker — use the `mvnw-docker` scripts:
 
 - Build all modules:
-  - `./mvnw -DskipTests package`
+  - `./mvnw-docker.cmd -DskipTests package`
+  - `./mvnw-docker.ps1 -DskipTests package`
 
 - Run all tests:
-  - `./mvnw test`
+  - `./mvnw-docker.cmd test`
+  - `./mvnw-docker.ps1 test`
 
-- Run a single module’s tests:
-  - `./mvnw -pl market-data-service test`
+- Run a single module's tests:
+  - `./mvnw-docker.cmd -pl market-data-service test`
 
 - Run a single test class:
-  - `./mvnw -pl market-data-service -Dtest=SomeTest test`
+  - `./mvnw-docker.cmd -pl market-data-service -Dtest=SomeTest test`
 
-- Run a single service locally:
-  - `./mvnw -pl web-service spring-boot:run`
+These run `maven:3.9.9-eclipse-temurin-21` with the repo root mounted at `/workspace` and `~/.m2` mounted for dependency caching.
 
-Docker Maven alternative (when local `mvn` is missing):
+### Frontend
 
-- `./mvnw-docker.cmd -pl web-service -am -DskipTests compile`
+The web-app dev server is started automatically by `manage.cmd start` (inside a `node:22-alpine` container). **Do not run `npm install`, `npm run dev`, or `npm run build` locally** — all of these happen inside the Docker container.
 
-### Frontend (Vite)
-
-Run these from [web-app/](web-app/).
-
-- Install deps:
-  - `npm install`
-
-- Dev server:
-  - `npm run dev`
-
-- Production build:
-  - `npm run build`
-
-- Preview build:
-  - `npm run preview`
-
-Note: this frontend `package.json` does not currently define `lint` or `test` scripts.
+No `lint` or `test` scripts are defined.
 
 ### Database init
-Initialize schema/time-series tables (TimescaleDB container must be running):
+
+TimescaleDB container must be running. Two init scripts:
 
 - PowerShell:
   - `Get-Content .\db\init\01_init_kline.sql | docker exec -i trading-timescaledb psql -U trading -d trading_platform`
+  - `Get-Content .\db\init\02_init_indicators.sql | docker exec -i trading-timescaledb psql -U trading -d trading_platform`
+
+- Bash:
+  - `cat db/init/01_init_kline.sql | docker exec -i trading-timescaledb psql -U trading -d trading_platform`
+  - `cat db/init/02_init_indicators.sql | docker exec -i trading-timescaledb psql -U trading -d trading_platform`
+
+`01_init_kline.sql` creates the K-line hypertable; `02_init_indicators.sql` creates MA, MACD, RSI, and Bollinger Band hypertables.
 
 ### API quick test
 
-- `curl "http://localhost:8181/api/web/kline?symbol=TSLA&market=us&period=daily&startDate=2021-03-18&endDate=2026-03-18"`
+```bash
+curl "http://localhost:8181/api/web/kline?symbol=TSLA&market=us&period=daily&startDate=2021-03-18&endDate=2026-03-18"
+```
 
-## Architecture (big picture)
+## Architecture
 
 ### Maven modules and responsibilities
 
-The parent reactor is [pom.xml](pom.xml). The modules form a small microservice suite plus shared libraries:
+The parent reactor is [pom.xml](pom.xml). Modules fall into two categories:
 
-- `trading-common`: shared types/DTOs used across services.
+**Shared libraries** (not runnable on their own):
+
+- `trading-common`: shared DTOs/types used across services.
 - `strategy-core`: strategy/backtest domain library used by backtest execution.
-- `market-data-service`: integrates external market data provider(s) and persists/caches to TimescaleDB.
-- `indicator-service`: computes indicators, backed by the same DB.
-- `backtest-service`: runs simulations using `strategy-core`; depends on market-data and indicator services.
+
+**Runnable services** (Spring Boot apps):
+
+- `market-data-service`: integrates FMP as external market data provider; persists/caches K-line data to TimescaleDB.
+- `indicator-service`: computes technical indicators (MA, MACD, RSI, Bollinger) and persists them to TimescaleDB.
+- `backtest-service`: runs simulations using `strategy-core`; depends on market-data and indicator services. Supports Python-based strategy execution via a custom Docker image (see below).
 - `web-service`: BFF/API gateway for the web UI; aggregates calls to downstream services.
-- `web-app`: React UI.
 
 ### Service topology and ports
 
-Default local ports (also used by `scripts/manage.sh`):
+| Service | Port |
+| --- | --- |
+| `web-app` (Vite dev) | 3000 |
+| `web-service` | 8181 |
+| `market-data-service` | 8182 |
+| `indicator-service` | 8183 |
+| `backtest-service` | 8185 |
+| TimescaleDB | 5432 |
 
-- `web-service`: `8181`
-- `market-data-service`: `8182`
-- `indicator-service`: `8183`
-- `backtest-service`: `8185`
-- TimescaleDB: `5432`
+### Service-to-service wiring
 
-### Configuration and service-to-service calls
+`web-service` is the only user-facing entry point. It calls downstream services via configurable URLs:
 
-Service URLs are configured via environment variables in the startup script (useful when running in Docker):
+- `web-service` receives: `SERVICE_MARKET_DATA_URL`, `SERVICE_INDICATOR_URL`, `SERVICE_BACKTEST_URL`
+- `backtest-service` receives: `SERVICE_MARKET_DATA_URL`, `SERVICE_INDICATOR_URL`
+- All services receive: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
+- `market-data-service` additionally receives: `FMP_API_KEY`
 
-- `web-service` receives:
-  - `SERVICE_MARKET_DATA_URL` (default `http://host.docker.internal:8182`)
-  - `SERVICE_INDICATOR_URL` (default `http://host.docker.internal:8183`)
-  - `SERVICE_BACKTEST_URL` (default `http://host.docker.internal:8185`)
-
-- `backtest-service` receives:
-  - `SERVICE_MARKET_DATA_URL`, `SERVICE_INDICATOR_URL`
-
-Database connectivity for services is typically passed as:
-
-- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
-
-External market-data provider key:
-
-- `FMP_API_KEY` (passed into `market-data-service` when started via `scripts/manage.sh`).
+Defaults (set in [scripts/manage.sh](scripts/manage.sh)) use `http://host.docker.internal:{port}` for inter-service calls and `localhost:5432` for the DB.
 
 ### Backend layering convention
 
-Services generally follow a ports/adapters style split (names vary slightly per module):
+Services use a 4-layer architecture (varying slightly per module):
 
-- `presentation/`: HTTP controllers + request/response mapping + exception handling
-- `domain/`: core business logic and ports (interfaces)
-- `infrastructure/`: DB access, HTTP clients, and other integrations
+- `presentation/` — HTTP controllers, request/response DTOs, exception handlers
+- `application/` — use cases (`usecase/`) and application services (`service/`)
+- `domain/` — core business logic, domain models (`model/`), and ports/interfaces (`port/`)
+- `infrastructure/` — DB access (`persistence/`), HTTP clients (`client/`), external API integrations (`external/`), Spring config
 
-This repo’s main integration seams are:
+Cross-cutting: `trading-common` provides shared DTOs under `ai.jzhu.trading.common.dto`.
 
-- outbound HTTP calls from `web-service` to the other services
-- TimescaleDB access in the services that own persistence
+### backtest-service Python3 support
 
-## Repo-specific rules files
-No Cursor rules (`.cursor/rules/` or `.cursorrules`) or Copilot instructions (`.github/copilot-instructions.md`) were found in this repo.
+[backtest-service/Dockerfile](backtest-service/Dockerfile) extends the base Maven image with Python3, enabling `PYTHON_CODE` strategy execution. The manage script builds this as `jzhu-backtest-service:latest` on startup. If the build fails, Python strategies are unavailable but the service still runs with Java strategies only.
+
+### Configuration
+
+- [.env](.env) — runtime secrets and Spring profile (`FMP_API_KEY`, `SPRING_PROFILES_ACTIVE`, DB credentials). Loaded by manage.sh and by `spring-dotenv` at app startup. **Do not commit real API keys.**
+- Service `application.yml` files reside in each module's `src/main/resources/`.
