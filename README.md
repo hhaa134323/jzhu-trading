@@ -1,11 +1,11 @@
-# jzhu-trading
+# QuantSimulator
 
-This repository contains the `jzhu-trading` microservices and web app used for local development and backtesting.
+This repository conuantSimulatortains the `QuantSimulator` microservices and web app used for local development and backtesting.
 
 Quick start (requires Docker Desktop):
 
 ```powershell
-cd jzhu-trading
+cd QuantSimulator
 scripts\manage.cmd start
 ```
 
